@@ -12,7 +12,7 @@ db_fasta = 'uniprot_trembl.fasta' # 'uniprot_sprot.fasta' # 'Pfam-A.full' # 'ref
 e_thres = 0.001 #
 incE_thres = 0.00001 # 0.1 #
 num_cpu = 8
-output_file = query_fasta.split('.')[0] + '_' + search_type + '_' + db_fasta.split('.')[0] + '_incE='+"{:.0e}".format(incE_thres) + '_E='+"{:.0e}".format(e_thres)
+output_file = query_fasta.split('.')[0] + '_' + search_type + '_' + db_fasta.split('.')[0] + '_incE'+"{:.0e}".format(incE_thres) + '_E'+"{:.0e}".format(e_thres)
 
 # Define PHMMER command
 jackhmmer_cmd = [

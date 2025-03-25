@@ -11,8 +11,11 @@ try:
 except ImportError as e:
     pandas_imported = False
 import numpy as np
-import os
+import os, sys
 import platform
+from Bio import SeqIO
+from Bio.Seq import Seq
+from Bio import Align
 opsys = platform.system()
 from variables import address_dict, subfolders, mapping
 data_folder = address_dict['PIPS2']
@@ -214,7 +217,7 @@ def get_enz_shortname(enzname):
     else:
         return enzname[:2]+enzname[-3:]
 def fetch_sequences_from_fasta(sequence_fpath):
-    from Bio import SeqIO
+
     import os
     sequence_names = []
     sequence_list = []
@@ -231,11 +234,12 @@ def write_sequence_to_fasta(sequences, seq_names, filename, fasta_dir):
         seq_names = [seq_names]
     with open(fasta_file, 'w') as f:
         for i, (sequence, seq_name) in enumerate(zip(sequences, seq_names)):
-            f.write('> ' + seq_name + '\n')
-            if i==len(sequences)-1:
-                f.write(sequence)
-            else:
-                f.write(sequence+'\n')
+            if sequence is not None:
+                f.write('>' + seq_name + '\n')
+                if i==len(sequences)-1:
+                    f.write(sequence)
+                else:
+                    f.write(sequence+'\n')
     print('Saved fasta file to ' + fasta_file)
     return fasta_file
 
@@ -282,7 +286,6 @@ def run_pairwise_alignment(seq1, seq2,
                            mode='global', match_score=2, mismatch_score=-1,
                            open_gap_score=-0.5, extend_gap_score=-0.1,
                            target_end_gap_score=0.0, query_end_gap_score=0.0, print_alignments=False):
-    from Bio import Align
     # initialize aligner
     aligner = Align.PairwiseAligner()
     aligner.mode = mode
@@ -357,6 +360,20 @@ def add_sequences_to_dataframe(csv_fpath, enzname_to_seq_dict, df=None):
     # save df
     df.to_csv(csv_fpath)
     return df
+
+def get_enzname_from_expdata(csv_fpath, df=None):
+    if df is None:
+        df = pd.read_csv(csv_fpath, index_col=0)
+    struct_list = df.struct.tolist()
+    enz_list = ['_'.join(struct.split('_')[:-1]) for struct in struct_list]
+    enz_short_list = [get_enz_shortname(enz) for enz in enz_list]
+    df['enz_name'] = enz_list
+    df['enz_name_short'] = enz_short_list
+    print(df)
+    df.to_csv(csv_fpath)
+    unique_enz_list = list(set(enz_list))
+    unique_enzshort_list = list(set(enz_short_list))
+    return df, unique_enz_list, unique_enzshort_list
 
 def get_sequences_for_enzyme_list(csv_fpath, sequence_fpath, create_new_fasta=None, df=None):
     # get dataframe and enzyme lists
@@ -505,7 +522,7 @@ def get_mtx(W):
     msa_ori = np.array(msa)
     return msa_ori, one_hot(msa_ori, states)
 
-def get_contacts(model, save_res=None):
+def get_contacts(model, L, A, save_res=None):
     # get trained weights
     w = model.GREMLIN_.W0.detach().numpy()
     w = (w + w.T).reshape(L, A, L, A)
@@ -516,176 +533,177 @@ def get_contacts(model, save_res=None):
         np.savetxt(save_res + '_apc.csv', apc, delimiter=",")
     return raw, apc
 
-def annotate_heatmap(array_2D, ax, ndecimals=2, fontsize=8):
-    for (j,i),label in np.ndenumerate(array_2D):
-        if ndecimals==0 and ~np.isnan(label):
-            label = int(label)
-        else:
-            label = round(label,ndecimals)
-        ax.text(i,j,label,ha='center',va='center', color='0.8', fontsize=fontsize, fontweight='bold')
+def run_msa(seq_fname, msa_fname, method, seq_dir, msa_dir):
+    import subprocess
+    in_file = f'{seq_dir}{seq_fname}'
+    out_file = f'{msa_dir}{msa_fname}'
 
-def symlog(data):
-    idx_pos = np.where(data > 0)
-    idx_neg = np.where(data < 0)
-    data_symlog = np.zeros((data.shape[0], data.shape[1]))
-    data_symlog[:] = np.nan
-    data_symlog[idx_pos] = np.log(data[idx_pos])
-    data_symlog[idx_neg] = -np.log(-data[idx_neg])
-    return data_symlog
+    if method=='mafft':
+        mafft  = './msa/mafft-mac/mafft.bat'
+        mafft_command = f'{mafft} {in_file} > {out_file}'
+        print(mafft_command)
+        subprocess.call(mafft_command, shell=True)
 
-def heatmap(array, c='viridis', ax=None, cbar_kw={}, cbarlabel="", datamin=None, datamax=None, logscale_cmap=False,
-            annotate=None, row_labels=None, col_labels=None, show_gridlines=True, fontsize=8):
+    elif method == 'clustalo':
+        import subprocess
+        seq_fasta_fpath = os.path.abspath(f'{seq_dir}{seq_fname}')
+        msa_fpath = os.path.abspath(f'{msa_dir}{msa_fname}')
+        clustalo_fpath = os.path.abspath(f'./msa/clustalo/clustalo.exe')
+        cmd = f'{clustalo_fpath} -i {seq_fasta_fpath} -o {msa_fpath} --force'
+        msa_file = open(msa_fpath, 'w')
+        subprocess.run(cmd, stdout=msa_file, encoding="utf8")
+        msa_file.close()
+    return msa_fname
+
+def calculate_sequence_identity(seq1, seq2):
     """
-    Create a heatmap from a numpy array and two lists of labels.
+    Calculate percentage sequence identity between two sequences.
+    Ignores gaps when computing identity.
 
-    Parameters
-    ----------
-    data
-        A 2D numpy array of shape (N, M).
-    row_labels
-        A list or array of length N with the labels for the rows.
-    col_labels
-        A list or array of length M with the labels for the columns.
-    ax
-        A `matplotlib.axes.Axes` instance to which the heatmap is plotted.  If
-        not provided, use current axes or create a new one.  Optional.
-    cbar_kw
-        A dictionary with arguments to `matplotlib.Figure.colorbar`.  Optional.
-    cbarlabel
-        The label for the colorbar.  Optional.
-    **kwargs
-        All other arguments are forwarded to `imshow`.
+    Args:
+        seq1 (str): Reference sequence.
+        seq2 (str): Target sequence to compare.
+
+    Returns:
+        float: Percentage sequence identity.
     """
-    import matplotlib.pyplot as plt
-    from mpl_toolkits.axes_grid1 import make_axes_locatable
+    matches = sum(1 for a, b in zip(seq1, seq2) if a == b and a != '-' and b != '-')
+    length = sum(1 for a, b in zip(seq1, seq2) if a != '-' and b != '-')
 
-    if not ax:
-        ax = plt.gca()
-    cmap = getattr(plt.cm, c)
+    if length == 0:
+        return 0  # Avoid division by zero
 
-    # get array size and xy labels
-    data = array.astype(float)
-    ny, nx = data.shape
+    return (matches / length) * 100
 
-    # get row and column labels
-    if row_labels is None:
-        row_labels = list(np.arange(ny) + 1)
-    if col_labels is None:
-        col_labels = list(np.arange(nx) + 1)
+def filter_and_save_sequences(input_fasta, reference_id=0, inequality='<', id_threshold=90, len_threshold=None, output_filtered_fasta=None, msa_dir='./', seq_dir='./'):
+    """
+    Filters an MSA file, removes sequences with >X% sequence identity to the reference,
+    and saves the remaining sequences as a new FASTA file (without alignment) for MSA regeneration.
 
-    # get locations of nan values and negative values, replace values so these don't trigger an error
-    naninds = np.where(np.isnan(data) == True)
-    infinds = np.where(np.isinf(data) == True)
-    if len(infinds[0]) > 0:
-        data[infinds] = np.nan
-    if len(naninds[0]) > 0:
-        data[naninds] = np.nanmean(data)
-    if len(infinds[0]) > 0:
-        data[infinds] = np.nanmean(data)
-    data_cmap = data.copy()
+    Args:
+        input_fasta (str): Path to input MSA file in FASTA format.
+        reference_id (str): The identifier of the reference sequence.
+        id_threshold (float): Sequence identity id_threshold (e.g., 90.0 for 90%).
+        output_filtered_fasta (str): Path to output FASTA file with unaligned filtered sequences.
+    """
+    from Bio import SeqIO
 
-    # get min and max values
-    if datamin is None:
-        datamin = np.nanmin(data_cmap)
-    if datamax is None:
-        datamax = np.nanmax(data_cmap)
+    # get all records
+    records = list(SeqIO.parse(msa_dir+input_fasta, "fasta"))
+    num_records = len(records)
 
-    # get colormap to plot
-    if logscale_cmap:  # plot on logscale
-        data_cmap = symlog(data_cmap)
-        datamin, datamax = np.min(data_cmap), np.max(data_cmap)
+    # Find the reference sequence
+    reference_seq = None
+    if isinstance(reference_id,int):
+        reference_seq = records[reference_id].seq
+    else:
+        for record in records:
+            if record.id == reference_id:
+                reference_seq = str(record.seq).replace("-", "")  # Remove gaps for sequence comparison
+                break
 
-    # get cmap gradations
-    dataint = (datamax - datamin) / 100
-    norm = plt.Normalize(datamin, datamax + dataint)
-    # convert data array into colormap
-    colormap = cmap(norm(data_cmap))
+    if reference_seq is None:
+        print(f"Reference sequence '{reference_id}' not found in MSA.")
+        sys.exit(1)
+    else:
+        reference_seq_len = len(reference_seq)
+        seq_len_threshold = int(len_threshold*reference_seq_len)
 
-    # Set the positions of nan values in colormap to 'lime'
-    colormap[naninds[0], naninds[1], :3] = 0, 1, 0
-    colormap[infinds[0], infinds[1], :3] = 1, 1, 1
+    filtered_records = []
+    for record in records:
+        unaligned_seq = str(record.seq).replace("-", "")  # Remove gaps before saving
+        seq_len = len(unaligned_seq)
+        if record.id == reference_id:
+            record.seq = Seq(reference_seq)
+            filtered_records.append(record)  # Always keep reference
+            continue
 
-    # plot colormap
-    im = ax.imshow(colormap, interpolation='nearest')
-
-    # Create colorbar
-    divider = make_axes_locatable(ax)
-    cax = divider.append_axes("right", size="3%", pad=0.07)
-    cbar = ax.figure.colorbar(plt.cm.ScalarMappable(norm=norm, cmap=cmap), cax=cax)
-
-    if logscale_cmap == True:
-        cbar_labels = cbar.ax.get_yticks()
-        cbar.set_ticks(cbar_labels)
-        cbar_labels_unlog = list(np.round(np.exp(np.array(cbar_labels)), 2))
-        cbar.set_ticklabels(cbar_labels_unlog)
-
-    # Turn off gridlines if required
-    ax.tick_params(axis='both', which='both', length=0, gridOn=show_gridlines)
-
-    # We want to show all ticks...
-    ax.set_xticks(np.arange(data.shape[1]))
-    ax.set_yticks(np.arange(data.shape[0]))
-    # ... and label them with the respective list entries.
-    ax.set_xticklabels(col_labels, fontsize=fontsize, ha="right")
-    ax.set_yticklabels(row_labels, fontsize=fontsize)
-
-    # Let the horizontal axes labeling appear on top.
-    ax.tick_params(top=False, bottom=True,
-                   labeltop=False, labelbottom=True)
-
-    # Rotate the tick labels and set their alignment.
-    plt.setp(ax.get_xticklabels(), rotation=90,
-             rotation_mode="anchor")
-
-    # Annotate
-    if annotate is not None:
-        if isinstance(annotate, int):
-            ndecimals = annotate
+        seq_identity = calculate_sequence_identity(reference_seq, unaligned_seq)
+        if eval(f'{seq_identity} {inequality} {id_threshold}'):
+            print(f"Removed {record.id}: {seq_identity:.2f}% identity {inequality} {id_threshold}%")
         else:
-            ndecimals = 3
-        annotate_heatmap(array, ax, ndecimals=ndecimals, fontsize=fontsize)
+            if len_threshold is None or seq_len > seq_len_threshold:
+                record.seq = Seq(unaligned_seq)  # Remove gaps before saving
+                filtered_records.append(record)
+            else:
+                print(f"Removed {record.id}: {seq_len} seq len < {seq_len_threshold}")
 
-    # Turn spines off and create white grid.
-    for edge, spine in ax.spines.items():
-        spine.set_visible(False)
+    # Save unaligned sequences for new MSA generation
+    if output_filtered_fasta is None:
+        output_filtered_fasta = input_fasta.replace('.fasta','_filt.fasta')
+    SeqIO.write(filtered_records, seq_dir+output_filtered_fasta, "fasta")
+    print(f"Filtered unaligned sequences saved to {seq_dir+output_filtered_fasta}. Kept {len(filtered_records)} sequences. >> Removed {num_records-len(filtered_records)} sequences.")
 
-    # set xticks
-    ax.set_xticks(np.arange(data.shape[1] + 1) - .5, minor=True)
-    ax.set_yticks(np.arange(data.shape[0] + 1) - .5, minor=True)
-    ax.grid(which="minor", color="w", linestyle='-', linewidth=0.5)
-    ax.tick_params(which="minor", bottom=False, left=False)
+    return output_filtered_fasta
 
-    return im, cbar, ax
+def run_clipkit(input_msa_fname, output_msa_fname, msa_dir, keep_ref_seq_positions=None, mode='kpic-gappy'):
+    """
+    Runs ClipKit on an input FASTA file and writes the trimmed MSA to an output file.
 
-
-def plot_variant_heatmap(arr, seq, N_res_per_heatmap_row, aaList, seq_name=None, savefig=None, figtitle=None):
-    import matplotlib.pyplot as plt
-    # Visualize the heatmaps
-    seq_len = len(seq)
-    residue_num = list(np.arange(1, seq_len + 1))
-    num_heatmaps = int(np.ceil(seq_len / N_res_per_heatmap_row))
-    heatmap_min = np.min(arr)
-    heatmap_max = np.max(arr)
-    fig, ax = plt.subplots(num_heatmaps, 1, figsize=(N_res_per_heatmap_row / len(aaList) * 4, num_heatmaps * 4))
-    for k in range(num_heatmaps):
-        if num_heatmaps == 1:
-            ax_k = ax
+    Args:
+        input_fasta (str): Path to the input MSA file in FASTA format.
+        output_fasta (str): Path to the output trimmed MSA file (default: "output.fasta").
+    """
+    import subprocess
+    # create auxiliary file to keep certain positions
+    if keep_ref_seq_positions is not None:
+        sequences, _, _ = fetch_sequences_from_fasta(msa_dir+input_msa_fname)
+        ref_seq = sequences[keep_ref_seq_positions]
+        pos_to_keep = [i+1 for i,aa in enumerate(ref_seq) if aa!='-']
+        seq_to_keep = [aa for aa in ref_seq if aa!='-']
+        print('Positions to keep:', len(pos_to_keep), pos_to_keep)
+        print('Reference sequence:', ''.join(seq_to_keep))
+        with open(msa_dir+'aux.txt','w') as f:
+            for pos in pos_to_keep:
+                f.write(f'{pos}\tkeep\n')
+    try:
+        # Run ClipKit
+        if keep_ref_seq_positions is None:
+            subprocess.run(["clipkit", msa_dir+input_msa_fname, "-o", msa_dir+output_msa_fname, "-m", mode], check=True)
         else:
-            ax_k = ax[k]
-        residue_num_k = residue_num[k * N_res_per_heatmap_row:min((k + 1) * N_res_per_heatmap_row, seq_len)]
-        start_idx = k * N_res_per_heatmap_row
-        end_idx = min((k + 1) * N_res_per_heatmap_row, seq_len)
-        heatmap_k = arr[:, start_idx:end_idx]
-        wt_idxs_k = np.array([[aaList.index(wt_aa),res_idx] for res_idx, wt_aa in enumerate(seq[start_idx:end_idx])])
-        im = ax_k.imshow(heatmap_k, cmap="viridis", aspect="auto", vmin=heatmap_min, vmax=heatmap_max)
-        ax_k.scatter(wt_idxs_k[:,1], wt_idxs_k[:,0], c='r', s=4)
-        ax_k.set_yticks(range(20), aaList)
-        ax_k.set_xticks(range(len(residue_num_k)), residue_num_k, fontsize=7, rotation=45)
-    fig.colorbar(im, orientation='vertical')
-    if figtitle is not None:
-        if seq_name is not None:
-            figtitle = seq_name + ': ' + figtitle
-        plt.suptitle(figtitle, y=0.93, fontsize=16)
-    if savefig is not None:
-        plt.savefig(savefig, dpi=300, bbox_inches='tight')
-    plt.show()
+            subprocess.run(["clipkit", msa_dir + input_msa_fname, "-o", msa_dir + output_msa_fname, "-a", msa_dir + 'aux.txt', "-m", 'cst'], check=True)
+            # os.remove(msa_dir + 'aux.txt')
+        print(f"ClipKit successfully trimmed MSA. Output saved to: {msa_dir+output_msa_fname}")
+    except subprocess.CalledProcessError as e:
+        print(f"Error running ClipKit: {e}")
+
+    return output_msa_fname
+
+
+def replace_edge_gaps(input_fasta, output_fasta, msa_dir):
+    """
+    Replaces leading and trailing '-' (gaps) with 'X' in each sequence of an MSA file.
+
+    Args:
+        input_fasta (str): Path to the input MSA file in FASTA format.
+        output_fasta (str): Path to the output modified MSA file.
+    """
+    modified_records = []
+
+    for record in SeqIO.parse(msa_dir+input_fasta, "fasta"):
+        seq_str = str(record.seq)
+
+        # Replace leading and trailing '-' with 'X'
+        modified_seq = list(seq_str)
+        start, end = 0, len(modified_seq) - 1
+
+        # Replace leading '-'
+        while start < len(modified_seq) and modified_seq[start] == '-':
+            modified_seq[start] = 'X'
+            start += 1
+
+        # Replace trailing '-'
+        while end >= 0 and modified_seq[end] == '-':
+            modified_seq[end] = 'X'
+            end -= 1
+
+        # Save the modified sequence
+        record.seq = Seq("".join(modified_seq))
+        modified_records.append(record)
+
+    # Write the modified MSA to a new file
+    SeqIO.write(modified_records, msa_dir+output_fasta, "fasta")
+    print(f"Modified MSA saved to {msa_dir+output_fasta}")
+
+    return output_fasta
+

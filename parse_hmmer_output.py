@@ -1,17 +1,15 @@
-import re
-import csv
 import pandas as pd
 from variables import address_dict, subfolders
 from utils import fetch_sequences_from_fasta, write_sequence_to_fasta
 
 # Input and output file paths
 data_folder = address_dict['ECOHARVEST']
-input_fname = 'CALB_phmmer_uniprot_trembl_incE=1e-03_E=1e-03.out' # 'CALB_jackhmmer_Pfam-A_incE=1e-05_E=1e-03.out' #
+input_fname = 'CALA_phmmer_uniprot_trembl_incE1e-03_E1e-03.out' # 'CALB_jackhmmer_Pfam-A_incE1e-05_E1e-03.out' #
 output_fname = input_fname.replace('.out', '.csv')
 output_fasta_fname = input_fname.replace('.out', '')
 input_fpath = data_folder + subfolders['seqsearch'] + input_fname
 output_fpath = data_folder + subfolders['seqsearch'] + output_fname
-query_seq_fpath = data_folder + subfolders['sequences'] + 'CALB.fasta'
+query_seq_fpath = data_folder + subfolders['sequences'] + 'CALA.fasta'
 
 cols_init = [
     'E-value (Full Seq)', 'Score (Full Seq)', 'Bias (Full Seq)', 'E-value (Best 1 Domain)', 'Score (Best 1 Domain)', 'Bias (Best 1 Domain)','#dom exp','N', 'Seq Name', 'Description',
@@ -82,6 +80,7 @@ df.to_csv(output_fpath)
 # get fasta of sequences
 seq_names = df['Seq Name'].tolist()
 sequences = df['Target Seq Ali'].tolist()
+sequences = [s.replace('U','X') if isinstance(s, str) else None for s in sequences]
 # append query sequence
 query_seq, query_seq_name, _ = fetch_sequences_from_fasta(query_seq_fpath)
 _ = write_sequence_to_fasta(query_seq+sequences, query_seq_name+seq_names, output_fasta_fname, data_folder + subfolders['sequences'])
