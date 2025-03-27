@@ -1,5 +1,6 @@
 import yasara
 from variables import address_dict, subfolders
+from utils import run_msa
 
 def save_aligned_structures(output_sce_fpath, save_pdb=False):
     # save SCE
@@ -94,13 +95,23 @@ def yasara_align_structures(struct_fpaths, alignment_fpath, output_sce_fpath):
 
 if __name__ == '__main__':
     data_folder = address_dict['ECOHARVEST']
+    seq_dir = data_folder + subfolders['sequences']
+    msa_dir = data_folder + subfolders['msa']
     struct_fnames = [
         'CALB_1tca.pdb',
         'CALA_2veo.pdb'
         # 'CALBonly.pdb',
         # 'CALAonly.pdb',
     ]
-    alignment_fpath = data_folder + subfolders['msa'] + 'CALB-CALA_yasaraStructAli.fasta'
-    output_sce_fpath = alignment_fpath.replace('msa/','sce/').replace('.fasta', '.sce')
+    struct_ali_fpath = msa_dir + 'CALB-CALA_yasaraStructAli.fasta'
+    seq_fname = None
+    output_msa_fpath = None
+
+    # perform structural alignment
+    output_sce_fpath = struct_ali_fpath.replace('msa/','sce/').replace('.fasta', '.sce')
     struct_fpaths = [data_folder+subfolders['pdb']+f for f in struct_fnames]
-    yasara_align_structures(struct_fpaths, alignment_fpath, output_sce_fpath)
+    yasara_align_structures(struct_fpaths, struct_ali_fpath, output_sce_fpath)
+
+    # use alignment to get MSA alignment
+    if seq_fname is not None and output_msa_fpath is not None:
+        run_msa(seq_fname, output_msa_fpath, 'mafft', seq_dir, msa_dir, fmt='fasta', seed_ali=struct_ali_fpath)

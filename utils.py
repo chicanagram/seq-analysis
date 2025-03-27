@@ -533,14 +533,17 @@ def get_contacts(model, L, A, save_res=None):
         np.savetxt(save_res + '_apc.csv', apc, delimiter=",")
     return raw, apc
 
-def run_msa(seq_fname, msa_fname, method, seq_dir, msa_dir):
+def run_msa(seq_fname, msa_fname, method, seq_dir, msa_dir, fmt='fasta', seed_ali=None):
     import subprocess
     in_file = f'{seq_dir}{seq_fname}'
     out_file = f'{msa_dir}{msa_fname}'
 
     if method=='mafft':
         mafft  = './msa/mafft-mac/mafft.bat'
-        mafft_command = f'{mafft} {in_file} > {out_file}'
+        if seed_ali is None:
+            mafft_command = f'{mafft} {in_file} > {out_file}'
+        else:
+            mafft_command = f'{mafft} --seed {seed_ali} {in_file} > {out_file}'
         print(mafft_command)
         subprocess.call(mafft_command, shell=True)
 
