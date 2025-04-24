@@ -24,6 +24,26 @@ def run_blastp(query_fasta, db_name, output_file, e_thres=1e-5, max_target_seqs=
         print("BLASTP failed:")
         print(result.stderr)
 
+def run_biopython_blastp(protein_sequence, blast_fname, data_folder, blast_subfolder=subfolders['sequences'], expect=10.0, hitlist_size=50):
+    """
+    Run a blast search given an input sequence
+    """
+    from Bio.Blast import NCBIWWW
+    print('Starting blast search...')
+    result_handle = NCBIWWW.qblast("blastp", "nr", protein_sequence, expect=expect, hitlist_size=hitlist_size)
+    print(f'Completed blast search.')
+    # save result
+    if blast_fname is not None:
+        with open(f"{data_folder}{blast_subfolder}{blast_fname}.xml", "w") as out_handle:
+            out_handle.write(result_handle.read())
+        result_handle.close()
+        print()
+    return result_handle
+
+def run_biopython_psiblast():
+    from Bio.Blast.Applications import NcbipsiblastCommandline
+    cline = NcbipsiblastCommandline(help=True)
+    NcbipsiblastCommandline(cmd='psiblast', help=True)
 
 if __name__ == '__main__':
     # Define input files and output file

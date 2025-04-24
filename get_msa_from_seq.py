@@ -13,7 +13,7 @@ def main():
     data_folder = address_dict['ECOHARVEST']
     seq_dir = data_folder + subfolders['sequences']
     msa_dir = data_folder + subfolders['msa']
-    seq_fname = 'CALA_UML_KLIP.fasta' # 'CALA_phmmer_uniprot_trembl_incE1e-03_E1e-03.fasta' #  'CALB_phmmer_uniprot_trembl_incE1e-03_E1e-03.fasta' # 'lipases_initialMSA.fasta' #
+    seq_fname = 'CARs_litsearch.fasta' # 'CALA_UML_KLIP.fasta' # 'CALA_phmmer_uniprot_trembl_incE1e-03_E1e-03.fasta' #  'CALB_phmmer_uniprot_trembl_incE1e-03_E1e-03.fasta' # 'lipases_initialMSA.fasta' #
     msa_method = 'mafft' # 'clustalo' #
     fname_suffix = '' # '_filt_trimmed' #
     msa_fname = seq_fname[:seq_fname.find('.fa')] + f'_{msa_method}' + fname_suffix + '.fasta'

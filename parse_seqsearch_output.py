@@ -2,7 +2,7 @@ import pandas as pd
 from variables import address_dict, subfolders
 from utils import fetch_sequences_from_fasta, write_sequence_to_fasta
 
-def parse_hmmer_output(input_fname, output_fname, output_fasta_fname, query_seq_input, sequences_dir, seqsearch_dir):
+def parse_hmmer_output(input_fname, output_fname, output_fasta_fname, query_seq_input, sequences_dir, seqsearch_dir, max_target_seqs=None):
 
     cols_init = [
         'E-value (Full Seq)', 'Score (Full Seq)', 'Bias (Full Seq)', 'E-value (Best 1 Domain)', 'Score (Best 1 Domain)', 'Bias (Best 1 Domain)','#dom exp','N', 'Seq Name', 'Description',
@@ -64,10 +64,13 @@ def parse_hmmer_output(input_fname, output_fname, output_fasta_fname, query_seq_
         target_seq_ali = ''.join([seq_lines[l_idx].strip().split()[2] for l_idx in target_seq_row_idxs]).upper()
         query_seq_ali = ''.join([seq_lines[l_idx].strip().split()[2] for l_idx in query_seq_row_idxs]).upper()
         df_rows[i] += [target_seq_ali, query_seq_ali]
-
     df = pd.DataFrame(df_rows, columns=cols_init)
     df = df[columns]
-    print(df)
+
+    # filter to max target # of sequences
+    if max_target_seqs is not None and max_target_seqs<len(df):
+        df = df.iloc[:max_target_seqs,:]
+        print(f'Filtered top {max_target_seqs} hits.')
     df.to_csv(seqsearch_dir + output_fname)
 
     # get fasta of sequences
@@ -81,8 +84,9 @@ def parse_hmmer_output(input_fname, output_fname, output_fasta_fname, query_seq_
     elif isinstance(query_seq_input, tuple):
         (query_seq, query_seq_name) = query_seq_input
     _ = write_sequence_to_fasta(query_seq+sequences, query_seq_name+seq_names, output_fasta_fname, sequences_dir)
+    return df
 
-def parse_blastp_output(input_fname, output_fname, output_fasta_fname, query_seq_input, sequences_dir, seqsearch_dir):
+def parse_blastp_output(input_fname, output_fname, output_fasta_fname, query_seq_input, sequences_dir, seqsearch_dir, max_target_seqs=None):
     with open(seqsearch_dir + input_fname, 'r') as f:
         data = f.read()
         entries = data[data.find('>'):].split('>')
@@ -125,6 +129,11 @@ def parse_blastp_output(input_fname, output_fname, output_fasta_fname, query_seq
         df_rows.append(row)
     df = pd.DataFrame(df_rows)
     df = df.rename(columns={'Expect':'E-value'})
+
+    # filter to max target # of sequences
+    if max_target_seqs is not None and max_target_seqs<len(df):
+        df = df.iloc[:max_target_seqs,:]
+        print(f'Filtered top {max_target_seqs} hits.')
     df.to_csv(seqsearch_dir + output_fname)
 
     # get fasta of sequences
@@ -139,6 +148,7 @@ def parse_blastp_output(input_fname, output_fname, output_fasta_fname, query_seq
         (query_seq, query_seq_name) = query_seq_input
         query_seq, query_seq_name = [query_seq], [query_seq_name]
     _ = write_sequence_to_fasta(query_seq+sequences, query_seq_name+seq_names, output_fasta_fname, sequences_dir)
+    return df
 
 
 if __name__=='__main__':
@@ -152,9 +162,9 @@ if __name__=='__main__':
     output_fasta_fname = input_fname.replace('.out', '')
     # parse results
     if input_fname.find('hmmer')>-1:
-        parse_hmmer_output(input_fname, output_fname, output_fasta_fname, query_seq_fname, sequences_dir, seqsearch_dir)
+        df = parse_hmmer_output(input_fname, output_fname, output_fasta_fname, query_seq_fname, sequences_dir, seqsearch_dir)
     elif input_fname.find('blastp')>-1:
-        parse_blastp_output(input_fname, output_fname, output_fasta_fname, query_seq_fname, sequences_dir, seqsearch_dir)
+        df = parse_blastp_output(input_fname, output_fname, output_fasta_fname, query_seq_fname, sequences_dir, seqsearch_dir)
 
 
 

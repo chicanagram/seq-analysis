@@ -13,8 +13,8 @@ models= ['identity', 'blastn', 'trans', 'benner6', 'benner22', 'benner74', 'blos
 
 # Input and output file paths
 data_folder = address_dict['ECOHARVEST']
-msa_fname = 'lipases_initialMSA_mafft.fasta' # 'CALB_phmmer_uniprot_trembl_incE=1e-03_E=1e-03_mafft.fasta'
-tree_model = 'blosum62' # 'identity' #
+msa_fname = 'CARs_litsearch_mafft.fasta' #  'lipases_initialMSA_mafft.fasta' # 'CALB_phmmer_uniprot_trembl_incE=1e-03_E=1e-03_mafft.fasta'
+tree_model = 'identity' #'blosum62' #
 # Load the MSA from a FASTA file
 alignment = AlignIO.read(data_folder + subfolders['msa'] + msa_fname, "fasta")
 print(len(alignment))
