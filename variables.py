@@ -85,3 +85,10 @@ element_mapping = {
     35: "Br",# Bromine
     53: "I"  # Iodine
 }
+
+amino_acid_groups = {
+    "np": ["F", "L", "I", "V", "M", "A", "W", "G", "P"],
+    "p~": ["Y", "C", "T", "S", "H", "Q", "N"],
+    "p-": ["E", "D"],  # Acidic
+    "p+": ["K", "R"]   # Basic
+}

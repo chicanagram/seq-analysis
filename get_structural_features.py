@@ -74,42 +74,48 @@ def get_dssp_properties(pdb_fpath, data_fbase):
     dssp_res = pd.DataFrame(dssp_res)
 
     return dssp_res
-def calc_res_to_lig_distances(pdb_fpath, chain_id='A', ligand_resname='H_UNK'):
+def calc_res_to_lig_distances(pdb_fpath, chain_id='A', ligand_resname='UNK'):
 
     # Parse PDB structure
     parser = PDBParser(QUIET=True)
     structure = parser.get_structure('protein', pdb_fpath)
+    model = structure[0]
 
     # Select ligand atoms
     ligand_atoms = []
-    for model in structure:
-        for chain in model:
-            for residue in chain:
-                if residue.get_resname().strip() == ligand_resname:
-                    ligand_atoms.extend([atom for atom in residue if atom.element != 'H'])
-    print(ligand_atoms)
+    model = structure[0]
+    for chain in model:
+        for residue in chain:
+            # select target (ligand, heme, metal ion) atoms only, excluding H
+            if residue.get_resname().strip() == ligand_resname:
+                ligand_atoms.extend([atom for atom in residue if atom.element != 'H'])
 
     # Compute distances between ligand atoms and heavy atoms of each residue
-    distance_results = {}
-    for model in structure:
-        for chain in model:
-            if chain.id == chain_id:
-                for residue in chain:
-                    if residue.get_resname().strip() != ligand_resname:
-                        res_id = (residue.get_resname(), residue.get_id()[1])
-                        distances = []
-                        for atom in residue:
-                            if atom.element != 'H':  # exclude hydrogen atoms
-                                for lig_atom in ligand_atoms:
-                                    distance = np.linalg.norm(atom.coord - lig_atom.coord)
-                                    distances.append(distance)
-                        distance_results[res_id] = distances
+    distance_results = []
+    for chain in model:
+        # match the
+        if chain.id == chain_id:
+            for residue in chain:
+                # select only the protein residues
+                if is_aa(residue, standard=True):
+                    res_id = (residue.get_resname(), residue.get_id()[1])
+                    min_distances = []
+                    avg_distances = []
+                    # iterate through atoms in the protein residue, excluding H atoms
+                    for atom in residue:
+                        dist_res_atom_to_all_target_atoms = []
+                        if atom.element != 'H':  # exclude hydrogen atoms
+                            # calculate distances between all residue atoms and target atoms
+                            for lig_atom in ligand_atoms:
+                                dist_atom2atom = np.linalg.norm(atom.coord - lig_atom.coord)
+                                dist_res_atom_to_all_target_atoms.append(dist_atom2atom)
+                            avg_dist_res_atom_to_target = np.mean(np.array(dist_res_atom_to_all_target_atoms))
+                            avg_distances.append(avg_dist_res_atom_to_target)
+                            min_distances.append(min(dist_res_atom_to_all_target_atoms))
+                    distance_results.append({'RealPos':res_id[1], f'min_distance_to_{ligand_resname}':min(min_distances), f'avg_distance_{ligand_resname}':min(avg_distances)})
 
-    # Example output
-    for res_id, distances in distance_results.items():
-        print(f"Residue {res_id} - Min distance: {min(distances):.2f} Å, Max distance: {max(distances):.2f} Å")
-
-
+    distance_results = pd.DataFrame(distance_results)
+    return distance_results
 
 if __name__ == '__main__':
     # input settings
@@ -122,8 +128,13 @@ if __name__ == '__main__':
     parse_protein_hetatom(pdb_fpath, data_fbase)
 
     # get DSSP properties
-    dssp_res = get_dssp_properties(pdb_fpath.replace('.pdb', '_Protein.pdb'), data_fbase)
-    # print(dssp_res)
+    struct_df = get_dssp_properties(pdb_fpath.replace('.pdb', '_Protein.pdb'), data_fbase)
 
     # get residue to ligand distances
-    calc_res_to_lig_distances(pdb_fpath, chain_id='A', ligand_resname='HEM')
+    for ligand_resname in ['HEM', 'UNK']:
+        dist_df = calc_res_to_lig_distances(pdb_fpath, chain_id='A', ligand_resname=ligand_resname)
+        struct_df = struct_df.merge(dist_df, on='RealPos', how='left')
+    struct_df = struct_df.round(3)
+    print(struct_df)
+    struct_df.to_csv(f"{data_folder}{subfolders['pdb']}{data_fbase}/{data_fbase}_StructProperties.csv")
+
