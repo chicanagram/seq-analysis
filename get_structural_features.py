@@ -4,8 +4,8 @@ import numpy as np
 from Bio.PDB import PDBParser, PDBIO, Select, is_aa
 pd.set_option('display.max_columns', None)
 pd.set_option('display.max_rows', None)
-from utils import fetch_sequences_from_fasta, write_sequence_to_fasta, run_msa
 from variables import address_dict, subfolders
+from get_surface_residues import yasara_get_surface_residues
 
 class MolSelect(Select):
     def __init__(self, mol_type):
@@ -134,6 +134,11 @@ if __name__ == '__main__':
     for ligand_resname in ['HEM', 'UNK']:
         dist_df = calc_res_to_lig_distances(pdb_fpath, chain_id='A', ligand_resname=ligand_resname)
         struct_df = struct_df.merge(dist_df, on='RealPos', how='left')
+
+    # get residue to surface distances, and surface patches
+    surfdist = yasara_get_surface_residues(pdb_fpath, surft=2.55, distt=12, minepisize=13)
+    struct_df = struct_df.merge(surfdist, on='RealPos', how='left')
+
     struct_df = struct_df.round(3)
     print(struct_df)
     struct_df.to_csv(f"{data_folder}{subfolders['pdb']}{data_fbase}/{data_fbase}_StructProperties.csv")

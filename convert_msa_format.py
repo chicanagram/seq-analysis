@@ -1,3 +1,5 @@
+import os
+import shutil
 from variables import address_dict, subfolders
 
 class Options:
@@ -52,6 +54,8 @@ class Options:
         self.numres = numres
 
 def convert_msa_format(input_file, input_fmt='fas', output_fmt='a3m', msa_dir='', from_perl_or_python='perl', options=None):
+    input_temp_fpath = msa_dir+f'TEMP.{input_fmt}'
+    output_temp_fpath = msa_dir+f'TEMP.{output_fmt}'
     input_fpath = msa_dir+input_file
     output_file = input_file.split('.')[0] + '.' + output_fmt
     output_fpath = msa_dir+output_file
@@ -61,24 +65,36 @@ def convert_msa_format(input_file, input_fmt='fas', output_fmt='a3m', msa_dir=''
         cmd = [
             "perl",
             "msa/reformat_msa.pl",
-            "fas",
+            input_fmt,
             output_fmt,
-            "-i", input_fpath,
-            "-o", output_fpath,
+            "-i", input_temp_fpath,
+            "-o", output_temp_fpath,
         ]
         try:
+            shutil.copyfile(input_fpath, input_temp_fpath)
+            print(f'Copied input file: {input_fpath} > {input_temp_fpath}')
             subprocess.call(cmd, shell=False)
+            os.rename(output_temp_fpath, output_fpath)
+            print(f'Renamed output file: {output_temp_fpath} > {output_fpath}')
+            os.remove(input_temp_fpath)
+            print(f'Converted MSA: {input_file} > {output_file}')
         except Exception as e:
             print(e)
     # use Python script
     elif from_perl_or_python == 'python':
         from msa.reformat_msa import run_conversion
         run_conversion(input_fpath, output_fpath, input_fmt, output_fmt, options)
-    print(f'Converted MSA: {input_file} > {output_file}')
+        print(f'Converted MSA: {input_file} > {output_file}')
+    print()
 
 if __name__=='__main__':
-    data_folder = address_dict['ECOHARVEST'] # address_dict['PON-Sol2']
+    data_folder = address_dict['PON-Sol2'] # address_dict['ECOHARVEST'] #
     msa_dir = data_folder + subfolders['msa']
-    input_file = 'CALA_blastp_uniprot_sprot_E1e-03_mafft.fasta'
     from_perl_or_python = 'perl'
-    convert_msa_format(input_file, input_fmt='fas', output_fmt='a3m', msa_dir=msa_dir, from_perl_or_python=from_perl_or_python, options=Options())
+    input_fmt = 'a3m' # 'fas'
+    output_fmt = 'fas' # 'a3m'
+    input_file_list = [f for f in os.listdir(msa_dir) if f.find('.'+input_fmt)>-1]
+    # input_file = '0_RLBP1_HUMAN__blastp_uniprot_trembl_E1e-03_mafft.a3m' # 'CALA_blastp_uniprot_sprot_E1e-03_mafft.fasta'
+    for input_file in input_file_list:
+        print(input_file)
+        convert_msa_format(input_file, input_fmt=input_fmt, output_fmt=output_fmt, msa_dir=msa_dir, from_perl_or_python=from_perl_or_python, options=Options())
