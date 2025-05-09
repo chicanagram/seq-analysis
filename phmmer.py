@@ -31,10 +31,10 @@ if __name__ == '__main__':
     query_dir = address_dict['ECOHARVEST'] + subfolders['sequences']
     output_dir = address_dict['ECOHARVEST'] + subfolders['seqsearch']
     db_dir = address_dict['databases']
-    query_fasta = 'CALA.fasta'
+    query_fasta = 'MmCAR.fasta'
     db_name = 'uniprot_trembl' # 'uniprot_sprot' # 'Pfam-A.full' # 'refProteomes'
-    e_thres = 0.001  # 0.01 #
-    incE_thres = 0.001  # 0.1 #
+    e_thres = 0.00001  # 0.01 #
+    incE_thres = 0.0001  # 0.1 #
     max_target_seqs = None
     num_cpu = 4
     output_file = query_fasta.split('.')[0] + '_' + search_type + '_' + db_name + '_incE' + "{:.0e}".format(incE_thres) + '_E' + "{:.0e}".format(e_thres)

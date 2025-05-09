@@ -156,8 +156,8 @@ if __name__=='__main__':
     data_folder = address_dict['ECOHARVEST']
     seqsearch_dir = data_folder + subfolders['seqsearch']
     sequences_dir = data_folder + subfolders['sequences']
-    query_seq_fname = 'CALA.fasta'
-    input_fname = 'CALA_phmmer_uniprot_trembl_incE1e-03_E1e-03'  # 'CALB_jackhmmer_Pfam-A_incE1e-05_E1e-03.out' #
+    query_seq_fname = 'MmCAR.fasta'
+    input_fname = 'MmCAR_phmmer_uniprot_trembl_incE1e-04_E1e-05'  # 'CALB_jackhmmer_Pfam-A_incE1e-05_E1e-03.out' #
     output_fname = input_fname.replace('.out', '.csv')
     output_fasta_fname = input_fname.replace('.out', '')
     # parse results

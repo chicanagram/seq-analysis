@@ -227,6 +227,7 @@ def fetch_sequences_from_fasta(sequence_fpath):
         sequence_list.append(str(record.seq))
         sequence_descriptions.append(record.description)
     return sequence_list, sequence_names, sequence_descriptions
+
 def write_sequence_to_fasta(sequences, seq_names, filename, fasta_dir):
     fasta_file = fasta_dir + filename + '.fasta'
     if isinstance(sequences, str) and isinstance(seq_names, str):
@@ -257,7 +258,7 @@ def split_fasta(max_res_per_fasta, fasta_fname, fasta_dir):
         seq_names_i = seq_names[i * num_seq_per_fasta:min((i + 1) * num_seq_per_fasta, num_seq)]
         fasta_out = write_sequence_to_fasta(seqs_i, seq_names_i, fasta_fname.replace('.fasta','') + '_' + str(i), fasta_dir)
 
-def deduplicate_fasta_sequences(fasta_fname_in, fasta_fname_out=None, fasta_dir='./'):
+def deduplicate_fasta_sequences(fasta_fname_in, sort_by_seq_name=False, fasta_fname_out=None, fasta_dir='./'):
     seqs, seq_names, _ = fetch_sequences_from_fasta(fasta_dir+fasta_fname_in)
     seqs_deduped = []
     seq_names_deduped = []
@@ -266,6 +267,13 @@ def deduplicate_fasta_sequences(fasta_fname_in, fasta_fname_out=None, fasta_dir=
             seq_names_deduped.append(seq_name)
             seqs_deduped.append(seq)
     print('# of seqs [BEFORE]', len(seq_names), '[AFTER]', len(seq_names_deduped))
+
+    # sort alphabetically by seq name
+    if sort_by_seq_name:
+        sort_idx = np.argsort(np.array(seq_names_deduped))
+        seq_names_deduped = [seq_names_deduped[idx] for idx in sort_idx]
+        seqs_deduped = [seqs_deduped[idx] for idx in sort_idx]
+
     # save resulting fasta
     if fasta_fname_out is None:
         fasta_fname_out = fasta_fname_in
