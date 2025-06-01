@@ -1,18 +1,25 @@
+import os
+import pandas as pd
 import yasara
 from variables import address_dict, subfolders
-from utils import run_msa
+from utils import run_msa, fetch_sequences_from_fasta
 
-def save_aligned_structures(output_sce_fpath, save_pdb=False):
+def save_aligned_structures(output_sce_fpath, struct_fpaths, join_obj_in_pdb=False):
     # save SCE
     yasara.SaveSce(output_sce_fpath)
     print('Saved SCE output:', output_sce_fpath)
     num_obj = yasara.CountObj('All')
     # save PDB
-    if save_pdb:
+    if join_obj_in_pdb:
         for obj_num in range(2,num_obj+1):
             yasara.JoinObj(obj_num, 1, center='No')
-        output_pdb_fpath = output_sce_fpath.replace('.sce', '.pdb').replace('sce/', 'pdb/')
-        yasara.SavePDB(1, output_pdb_fpath)
+    for i in range(num_obj):
+        obj_num = i+1
+        struct_fpath_unaligned = struct_fpaths[i]
+        other_struct_fpaths = [struct_fpaths[k] for k in range(len(struct_fpaths)) if i!=k]
+        other_structs_str = '-'.join([os.path.basename(f).replace('.pdb','') for f in other_struct_fpaths])
+        output_pdb_fpath = struct_fpath_unaligned.replace('.pdb', f'_aligned_{other_structs_str}.pdb')
+        yasara.SavePDB(obj_num, output_pdb_fpath)
         print('Saved PDB output:', output_pdb_fpath)
 
 def check_and_color(residues, calist):
@@ -54,7 +61,7 @@ def check_and_color(residues, calist):
 def yasara_align_structures(struct_fpaths, alignment_fpath, output_sce_fpath):
 
     # Initialize YASARA
-    yasara.Console('off')
+    # yasara.Console('off')
     yasara.FormatRes('RESName')
 
     # Load PDB files for all molecules
@@ -63,7 +70,9 @@ def yasara_align_structures(struct_fpaths, alignment_fpath, output_sce_fpath):
         yasara.ColorObj(i+1, 'magenta')
     # remove unnecessary components
     yasara.DelWater()
-    yasara.DelMol('not Protein')
+    # yasara.DelMol('not Protein')
+
+    # count the number of objects
     for obj_num in range(1, len(struct_fpaths)+1):
         num_mol = yasara.CountMol('Obj '+str(obj_num))
         if num_mol > 1:
@@ -76,6 +85,8 @@ def yasara_align_structures(struct_fpaths, alignment_fpath, output_sce_fpath):
         res = yasara.AlignObj(obj_num, 1, method='MUSTANGPP', results=4)
         rmsd, percent_identity, residues = res[0], res[1], res[2]
         calist = res[3:]
+        print('residues:', residues)
+        print('calist:', calist)
 
         # Process aligned residues
         num_iden, num_iden_hypho, num_sim, num_sim_hypho = check_and_color(residues, calist)
@@ -90,27 +101,101 @@ def yasara_align_structures(struct_fpaths, alignment_fpath, output_sce_fpath):
     yasara.SaveAli('!1', '1', filename=alignment_fpath, format='FASTA')
 
     # save aligned structures
-    save_aligned_structures(output_sce_fpath)
+    save_aligned_structures(output_sce_fpath, struct_fpaths, join_obj_in_pdb=False)
 
 
 if __name__ == '__main__':
-    data_folder = address_dict['ECOHARVEST']
+    data_folder = address_dict['PIPS2']
     seq_dir = data_folder + subfolders['sequences']
     msa_dir = data_folder + subfolders['msa']
+    data_fbase = 'UPOpanel_selected'
+    run_structure_alignment = False
+    parse_seq_struct_alignments = True
     struct_fnames = [
-        'CALB_1tca.pdb',
-        'CALA_2veo.pdb'
+        'ET096.pdb',
+        'CviUPO.pdb',
+        # 'DcaUPO.pdb', # 'HspUPO.pdb' # 'CE652.pdb'
+        # 'CALB_1tca.pdb',
+        # 'CALA_2veo.pdb'
         # 'CALBonly.pdb',
         # 'CALAonly.pdb',
     ]
-    struct_ali_fpath = msa_dir + 'CALB-CALA_yasaraStructAli.fasta'
+    struct_ali_fpath = f'{msa_dir}{data_fbase}/{struct_fnames[0].split('.')[0]}_{struct_fnames[1].split('.')[0]}_yasaraStructAli.fasta'
     seq_fname = None
     output_msa_fpath = None
+    output_sce_fpath = struct_ali_fpath.replace('msa/','sce/').replace('.fasta', '.sce')
+    struct_fpaths = [data_folder+subfolders['pdb']+data_fbase+'/'+f for f in struct_fnames]
 
     # perform structural alignment
-    output_sce_fpath = struct_ali_fpath.replace('msa/','sce/').replace('.fasta', '.sce')
-    struct_fpaths = [data_folder+subfolders['pdb']+f for f in struct_fnames]
-    yasara_align_structures(struct_fpaths, struct_ali_fpath, output_sce_fpath)
+    if run_structure_alignment:
+        yasara_align_structures(struct_fpaths, struct_ali_fpath, output_sce_fpath)
+
+    # align residues in dataframe
+    if parse_seq_struct_alignments:
+        # get aligned sequences
+        seqs_aligned, seq_names, _ = fetch_sequences_from_fasta(struct_ali_fpath)
+        # get aligned PDB structures
+        pdbs_as_string = []
+        pdbs_as_string_byresidue = []
+        for i, struct_fpath_unaligned in enumerate(struct_fpaths):
+            other_struct_fpaths = [struct_fpaths[k] for k in range(len(struct_fpaths)) if i != k]
+            other_structs_str = '-'.join([os.path.basename(f).replace('.pdb', '') for f in other_struct_fpaths])
+            aligned_pdb_fpath = struct_fpath_unaligned.replace('.pdb', f'_aligned_{other_structs_str}.pdb')
+            # load PDB data
+            with open(aligned_pdb_fpath, 'r') as f:
+                pdb_string = f.read()
+                pdbs_as_string.append(pdb_string)
+                pdb_string_list = [l for l in pdb_string.split('\n') if (l[:4]=='ATOM' or (l[:6]=='HETATM' and l.find('HIP')>-1) or l[:3]=='TER')]
+                pdb_as_string_byresidue = {}
+                # keep only lines with residue information
+                for l in pdb_string_list:
+                    l_list = ' '.join(l.split()).split(' ')
+                    if l_list[0]=='ATOM' or (l_list[0]=='HETATM' and l_list[3] in ['HIP']):
+                        res_num = int(l_list[5])
+                    elif l_list[0]=='TER':
+                        res_num = int(l_list[4])
+                    # get residue number
+                    if res_num not in pdb_as_string_byresidue:
+                        pdb_as_string_byresidue[res_num] = []
+                    # combine all lines belonging to the same residue
+                    pdb_as_string_byresidue[res_num].append(l)
+
+
+            # join lines as a string for each residue
+            for res_num, pdb_string_list_res in pdb_as_string_byresidue.items():
+                pdb_as_string_byresidue[res_num] = '\n'.join(pdb_string_list_res)
+                print(res_num, pdb_as_string_byresidue[res_num], '\n')
+
+            # update overall list
+            pdbs_as_string_byresidue.append(pdb_as_string_byresidue)
+
+
+        df = pd.DataFrame()
+        for i, (seq_ali, seq_name, pdb_as_string_byresidue) in enumerate(zip(seqs_aligned, seq_names, pdbs_as_string_byresidue)):
+            seq_nogaps = seq_ali.replace('-','')
+            pos_list = list(pdb_as_string_byresidue.keys())
+            pos_list_ali = []
+            pos_list.sort()
+            print(len(seq_nogaps), len(pos_list), [pos for pos in range(1,pos_list[-1]+1) if pos not in pos_list])
+            pdb_str_byresidue = []
+            pos_idx = 0
+            for aa in seq_ali:
+                if aa != '-':
+                    print(pos_idx, end=' ')
+                    pos = pos_list[pos_idx]
+                    pos_list_ali.append(int(pos))
+                    pdb_str_byresidue.append(pdb_as_string_byresidue[pos])
+                    pos_idx += 1
+                else:
+                    pos_list_ali.append(-1)
+                    pdb_str_byresidue.append('')
+            df[f'seq_{i}'] = list(seq_ali)
+            df[f'pos_{i}'] = pos_list_ali
+            df[f'pdb_by_residue_{i}'] = pdb_str_byresidue
+            print()
+
+        print(df)
+        df.to_csv(output_sce_fpath.replace('/sce','/pdb').replace('.sce','.csv'))
 
     # use alignment to get MSA alignment
     if seq_fname is not None and output_msa_fpath is not None:
