@@ -46,7 +46,7 @@ def extract_patent_data(patent_id):
 
 # Example usage
 if __name__ == "__main__":
-    patent_id = "US5817490"  # Replace with your patent ID
+    patent_id = "US8097439"  # Replace with your patent ID
     data = extract_patent_data(patent_id)
     if data:
         for k,v in data.items():
