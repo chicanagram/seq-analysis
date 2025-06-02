@@ -564,7 +564,6 @@ def run_msa(seq_fname, msa_fname, method, seq_dir, msa_dir, fmt='fasta', seed_al
         msa_file = open(msa_fpath, 'w')
         subprocess.run(cmd, stdout=msa_file, encoding="utf8")
         msa_file.close()
-    return msa_fname
 
 def calculate_sequence_identity(seq1, seq2):
     """

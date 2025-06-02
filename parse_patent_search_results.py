@@ -11,13 +11,14 @@ import pandas as pd
 pd.set_option('display.max_columns', None)
 from Bio import SeqIO
 from variables import address_dict, subfolders
-from utils import sort_list, split_mutation, fetch_sequences_from_fasta, write_sequence_to_fasta, split_fasta, deduplicate_fasta_sequences, get_sequences_in_folder, run_pairwise_alignment, get_mutagenesis_sequences, parse_genbank_to_df
+from utils import sort_list, split_mutation, fetch_sequences_from_fasta, run_msa, write_sequence_to_fasta, split_fasta, deduplicate_fasta_sequences, get_sequences_in_folder, run_pairwise_alignment, get_mutagenesis_sequences, parse_genbank_to_df
 from scrape_sequence_patents import extract_patent_data
 data_folder = address_dict['ECOHARVEST']
 sequence_subfolder = subfolders['sequences']
+msa_subfolder = subfolders['msa']
 patents_subfolder = subfolders['patents']
-seq_name_base_list = ['CALB', 'CALA', 'RML', 'TLL', 'BSL', 'UML', 'TCL'] # ['MmCAR'] #
-overall_results_fname_prefix = 'Lipase'
+seq_name_base_list = ['MmCAR'] # ['CALB', 'CALA', 'RML', 'TLL', 'BSL', 'UML', 'TCL'] #
+overall_results_fname_prefix = 'CAR' # 'Lipase'
 parse_patent_search_results = True
 scrape_patent_details = True
 analyse_patent_search_results = True
@@ -29,25 +30,47 @@ if parse_patent_search_results:
         print(seq_name_base)
         query_seq_fname = seq_name_base + '.fasta'
         target_seq_fname = seq_name_base+'_patent_hits.fasta'
-        target_seq_aligned_fname = seq_name_base+ '_patent_hits_aligned.fasta'
         blastp_description = seq_name_base+'_patent_hits_Descriptions.csv'
         db_fname = seq_name_base+'_patent_hits_GenBank.txt'
 
         ###########################
         # get pairwise alignments #
         ###########################
+        # get query seq
+        query_seq = str([record for record in SeqIO.parse(f'{data_folder}{sequence_subfolder}{query_seq_fname}', "fasta")][0].seq)
+
         # get sequences
         seqs, seq_names, seq_descriptions = fetch_sequences_from_fasta(data_folder+patents_subfolder+target_seq_fname)
-        seqs_aligned, seq_names_aligned, _ = fetch_sequences_from_fasta(data_folder + patents_subfolder + target_seq_aligned_fname)
-        # get alignment start and end positions
-        ali_starts = []
-        ali_ends = []
-        ali_strs = [s[s.find(':')+1:] for s in seq_names_aligned]
-        for ali_str in ali_strs:
-            ali_startend = [int(v) for v in ali_str.split('-')]
-            ali_starts.append(ali_startend[0])
-            ali_ends.append(ali_startend[1])
-        print('# of target sequences:', len(seqs))
+
+        # write temporary fasta with query seq at the top
+        temp_seq_fpath = write_sequence_to_fasta([query_seq]+seqs, [seq_name_base]+seq_names, seq_name_base+'_patent_hits_wquery', data_folder+sequence_subfolder)
+
+        # perform alignment for all sequences
+        fname = os.path.basename(temp_seq_fpath)
+        run_msa(fname, fname, method='mafft', seq_dir=data_folder+sequence_subfolder, msa_dir=data_folder+msa_subfolder)
+        os.remove(temp_seq_fpath)
+
+        # get alignment for each sequence
+        seqs_ali_wquery, seq_names_wquery, _ = fetch_sequences_from_fasta(data_folder + msa_subfolder + fname)
+
+        # get residue numbering for each sequence (excluding dashes)
+        seqs_pos_wquery = []
+        for seq in seqs_ali_wquery:
+            seq_pos_list = []
+            count = 0
+            for aa in seq:
+                if aa != '-':
+                    count+=1
+                    seq_pos_list.append(count)
+                else:
+                    seq_pos_list.append('-')
+            seqs_pos_wquery.append(seq_pos_list)
+
+        # parse aligned sequences and positions, split into query & target sequences
+        query_al = seqs_ali_wquery[0]
+        query_al_pos = seqs_pos_wquery[0]
+        target_seqs_aligned = seqs_ali_wquery[1:]
+        target_seqs_aligned_pos = seqs_pos_wquery[1:]
 
         # get blast results description
         df = pd.read_csv(data_folder+patents_subfolder+blastp_description)
@@ -65,11 +88,11 @@ if parse_patent_search_results:
         print(db)
 
         print('# of seqs:', len(seqs))
-        query_seq = [record for record in SeqIO.parse(f'{data_folder}{sequence_subfolder}{query_seq_fname}', "fasta")][0].seq
         num_mut_thres = 25 #50 #
         query_cover_thres = 30 # 20
         res_parsed = []
-        for i, (target_seq, target_seq_aligned, seq_name, seq_desc, ali_start, ali_end) in enumerate(zip(seqs, seqs_aligned, seq_names, seq_descriptions, ali_starts, ali_ends)):
+
+        for i, (target_seq, target_al, target_al_pos, seq_name, seq_desc) in enumerate(zip(seqs, target_seqs_aligned, target_seqs_aligned_pos, seq_names, seq_descriptions)):
             seq_desc = seq_desc.replace(seq_name+' ', '')
             hit = df.loc[df['Description']==seq_desc].iloc[0].to_dict()
             seq_len = len(target_seq)
@@ -85,62 +108,70 @@ if parse_patent_search_results:
             num_mut = int(np.ceil(len(query_seq)*query_cover/100*(1-percent_identity/100)))
             print(i, seq_name, seq_desc, '; seq len:', seq_len, '; query cover:', query_cover, '; percent identity:', percent_identity, '; # of mutations:', num_mut)
 
-            ### CONDITIONS FOR ADDING ENTRY ###
-            if num_mut > num_mut_thres or query_cover < query_cover_thres:
-                print(f'Alignment not performed: # mut = {num_mut}; query cover: {query_cover}')
-                continue
+            # ### CONDITIONS FOR ADDING ENTRY ###
+            # if num_mut > num_mut_thres or query_cover < query_cover_thres:
+            #     print(f'Alignment not performed: # mut = {num_mut}; query cover: {query_cover}')
+            #     continue
 
-            # perform pairwise alignment
-            if perform_pairwise_alignment:
-                target_seq_to_align = target_seq
-            else:
-                target_seq_to_align = target_seq_aligned
-            alignments = run_pairwise_alignment(target_seq, query_seq,
-                                   mode='global', match_score=2, mismatch_score=-1,
-                                   open_gap_score=-0.5, extend_gap_score=-0.1,
-                                   target_end_gap_score=0.0, query_end_gap_score=0.0, print_alignments=False)
-            # get first alignment
-            al = alignments[0]
-            target_al = al[0]
-            query_al = al[1]
-            # get mutations
-            res_idx = 0
-            mut_list = []
-            actual_wt_aa_list = []
-            for target_aa, query_aa in zip(target_al, query_al):
-                if query_aa != '-':
-                    res_idx += 1
-                    if target_aa != query_aa and target_aa!='-':
-                        mut = query_aa+str(res_idx)+target_aa
-                        mut_list.append(mut)
-                        actual_wt_aa_list.append(query_seq[res_idx-1]+str(res_idx))
-            # print(target_al)
-            # print(query_al)
+            query_al_trimmed = ''
+            target_al_trimmed = ''
+            insertion_list = []
+            deletion_list = []
+            mutation_list = []
+            latest_nongap_query_pos = 0
+            latest_nongap_target_pos = 0
+            for query_pos, query_aa, target_pos, target_aa in zip(query_al_pos, list(query_al), target_al_pos, list(target_al)):
+                # update latest_nongap pos
+                if query_pos != '-':
+                    latest_nongap_query_pos = query_pos
+                if target_pos != '-':
+                    latest_nongap_target_pos = target_pos
+                # handle gaps '-'
+                if query_aa != '-' and target_aa != '-':
+                    query_al_trimmed += query_aa
+                    target_al_trimmed += target_aa
+                # get insertions
+                if query_aa == '-' and target_aa != '-':
+                    insertion = f'{latest_nongap_query_pos}>{target_aa}'
+                    insertion_list.append(insertion)
+                # get deletions
+                elif query_aa != '-' and target_aa == '-':
+                    deletion = f'{query_aa}{query_pos}'
+                    deletion_list.append(deletion)
+                # get mutations
+                elif query_aa != '-' and target_aa != '-' and query_aa!=target_aa:
+                    mutation = f'{query_aa}{query_pos}{target_aa}'
+                    mutation_list.append(mutation)
+            print('Q:', query_al_trimmed)
+            print('T:', target_al_trimmed)
 
             seq_desc = seq_desc.replace('Sequence','Seq')
             patent_id = seq_desc[seq_desc.find('patent ')+7:].replace(' ','')
-            print(mut_list)
             res_parsed.append({
                 'query_seq': seq_name_base,
                 'accession': seq_name,
                 'description': seq_desc,
                 'patent_id': patent_id,
                 'title': title,
+                'abstract': '',
+                'claims': '',
                 'journal': journal,
+                'authors': authors,
                 'date': date,
                 'seq_len': seq_len,
                 'max_score': max_score,
                 'total_score': total_score,
                 'query_cover': query_cover,
                 'percent_identity': percent_identity,
-                'mutations': ', '.join(mut_list),
-                'ali_start': ali_start,
-                'ali_end': ali_end,
+                'num_mutations': len(mutation_list),
+                'num_insertions': len(insertion_list),
+                'num_deletions': len(deletion_list),
+                'mutations': ', '.join(mutation_list),
+                'insertions': ', '.join(insertion_list),
+                'deletions': ', '.join(deletion_list),
                 'sequence': target_seq,
-                'sequence_aligned': target_seq_aligned,
-                'authors':authors,
-                'abstract': '',
-                'claims': ''
+                'sequence_aligned': target_al_trimmed,
+                'query_sequence_aligned': query_al_trimmed,
                 })
 
         if len(res_parsed)>0:
