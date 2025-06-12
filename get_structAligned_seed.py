@@ -10,12 +10,14 @@ class AlignStruct:
         self.pdb_subfolder = pdb_subfolder
         self.data_fbase = data_fbase
 
-    def save_aligned_structures(self, output_sce_fpath, struct_fpaths, join_obj_in_pdb=False):
+    def save_aligned_structures(self, struct_fpaths, output_sce_fpath=None, join_obj_in_pdb=False):
+        print('struct_fpaths:', len(struct_fpaths), struct_fpaths)
         # save SCE
-        yasara.SaveSce(output_sce_fpath)
-        print('Saved SCE output:', output_sce_fpath)
-        num_obj = yasara.CountObj('All')
+        if output_sce_fpath is not None:
+            yasara.SaveSce(output_sce_fpath)
+            print('Saved SCE output:', output_sce_fpath)
         # save PDB of joined objects
+        num_obj = yasara.CountObj('All')
         if join_obj_in_pdb:
             for obj_num in range(2, num_obj + 1):
                 yasara.JoinObj(obj_num, 1, center='No')
@@ -48,17 +50,17 @@ class AlignStruct:
             atom2 = calist[j * 2 + 1]
             k = yasara.NameRes(f'Atom {atom1}')[0]
             l = yasara.NameRes(f'Atom {atom2}')[0]
-            print('\n', j, k, l)
+            # print('\n', j, k, l)
             # iterate through aa groups
             for aagroup_type, (aalist_group, aagroup_color) in groups.items():
                 if k in aalist_group and l in aalist_group:
-                    print(aagroup_type, 'similar', end=' ')
+                    # print(aagroup_type, 'similar', end=' ')
                     num_sim += 1
                     if aagroup_type == 'hypho':
                         num_sim_hypho += 1
                     yasara.ColorRes(f'Atom {atom1} or Atom {atom2}', aagroup_color)
                     if k == l:
-                        print('+ identical', end=' ')
+                        # print('+ identical', end=' ')
                         num_iden += 1
                         if aagroup_type == 'hypho':
                             num_iden_hypho += 1
@@ -87,10 +89,11 @@ class AlignStruct:
         # Align all other objects to object 1 using MUSTANGPP
         obj_ref = yasara.NameObj(1)
         for obj_num in range(2, len(struct_fpaths) + 1):
-            num_iden = num_iden_hypho = num_sim = num_sim_hypho = 0
             res = yasara.AlignObj(obj_num, 1, method='MUSTANGPP', results=4)
             rmsd, percent_identity, residues = res[0], res[1], res[2]
             calist = res[3:]
+            print('RMSD:', rmsd)
+            print('% identity:', percent_identity)
             print('residues:', residues)
             print('calist:', calist)
 
@@ -107,7 +110,7 @@ class AlignStruct:
         yasara.SaveAli('!1', '1', filename=seq_align_fpath, format='FASTA')
 
         # save aligned structures
-        self.save_aligned_structures(output_sce_fpath, struct_fpaths, join_obj_in_pdb=False)
+        self.save_aligned_structures(struct_fpaths, output_sce_fpath, join_obj_in_pdb=False)
 
     def parse_aligned_struct_info(self, seq_align_fpath, struct_fpaths, csv_fpath):
         # get aligned sequences
@@ -180,14 +183,14 @@ class AlignStruct:
             struct_fnames,
             seq_align_fpath,
             run_structure_alignment=True,
-            parse_seq_struct_alignments=True
+            parse_seq_struct_alignments=True,
+            save_sce=False
     ):
-
         struct_fpaths = [self.data_folder + self.pdb_subfolder + self.data_fbase + '/' + f for f in struct_fnames]
-        print(struct_fpaths)
-        print(self.data_folder, self.pdb_subfolder, self.data_fbase, struct_fnames)
-        output_sce_fpath = seq_align_fpath.replace('msa/', 'sce/').replace('.fasta', '.sce')
-        csv_fpath = output_sce_fpath.replace('/sce', '/pdb').replace('.sce', '.csv')
+        csv_fpath = seq_align_fpath.replace('msa/', 'pdb/').replace('.fasta', '.csv')
+        output_sce_fpath = None
+        if save_sce:
+            output_sce_fpath = seq_align_fpath.replace('msa/', 'sce/').replace('.fasta', '.sce')
 
         # align structures
         if run_structure_alignment:

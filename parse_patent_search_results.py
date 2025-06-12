@@ -17,8 +17,8 @@ data_folder = address_dict['ECOHARVEST']
 sequence_subfolder = subfolders['sequences']
 msa_subfolder = subfolders['msa']
 patents_subfolder = subfolders['patents']
-seq_name_base_list = ['CALB', 'CALA', 'RML', 'TLL', 'BSL', 'UML', 'TCL'] # ['MmCAR'] #
-overall_results_fname_prefix = 'Lipase' # 'CAR' #
+seq_name_base_list = ['MmCAR'] # ['CALB', 'CALA', 'RML', 'TLL', 'BSL', 'UML', 'TCL'] #
+overall_results_fname_prefix = 'CAR' # 'Lipase' #
 parse_patent_search_results = False
 scrape_patent_details = True
 analyse_patent_search_results = True
@@ -224,7 +224,7 @@ if analyse_patent_search_results:
             df_seqbase.loc[df_seqbase['patent_id']==patent_id, 'abstract'] = abstract
             df_filt.loc[df_filt['patent_id']==patent_id, 'abstract'] = abstract
             df_seqbase.loc[df_seqbase['patent_id']==patent_id, 'claims'] = claims
-            df_filt.loc[df_filt['patent_id']==patent_id, 'abstract'] = claims
+            df_filt.loc[df_filt['patent_id']==patent_id, 'claims'] = claims
         # save filtered hits for seqbase
         df_seqbase.sort_values(by='percent_identity', ascending=False).reset_index(drop=True).to_csv(data_folder+patents_subfolder+seq_name_base+'_patent_hits_filtered.csv')
 

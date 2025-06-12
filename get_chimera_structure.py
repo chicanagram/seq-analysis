@@ -128,13 +128,15 @@ class ChimerizePDB:
         print('Saved energy minimized PDB file to:', pdb_minimized_fpath)
         return pdb_minimized_fpath
 
-    def compute_average_distance_to_centroid(self, pdb_fpath, selected_residues):
+    def parse_atom_coords_from_structure(self, pdb_fpath, selected_residues=None):
         from Bio.PDB import PDBParser
-        # get structure
         parser = PDBParser(QUIET=True)
         structure = parser.get_structure("protein", pdb_fpath)
+        if selected_residues is None:
+            selected_residues = [residue.get_id()[1] for residue in structure[0][0]]
         # get selected residue coordinates
-        atom_coords = []
+        coords_byresidue = []
+        all_atom_coords = []
         # parse structure
         for model in structure:
             for chain in model:
@@ -143,38 +145,37 @@ class ChimerizePDB:
                     # res_id is a tuple like (' ', 150, ' ')
                     resnum = res_id[1]
                     if resnum in selected_residues:
+                        coords_atoms_in_residue = []
                         for atom in residue:
                             if atom.element != 'H':  # Skip hydrogen atoms
-                                atom_coords.append(atom.coord)
-        if not atom_coords:
-            raise ValueError(f"No atoms found for selected residues.")
-        coords = np.array(atom_coords)
+                                coords_atoms_in_residue.append(atom.coord)
+                                all_atom_coords.append(atom.coord)
+                        coords_byresidue.append(np.array(coords_atoms_in_residue))
 
-        # calculate centroid
-        centroid = coords.mean(axis=0)
-
-        # calculate distances from centroid
-        distances = np.linalg.norm(coords - centroid, axis=1)
-        average_distance = distances.mean()
-        return average_distance
+        alpha_carbon_coords = np.array([list(coords[1]) for coords in coords_byresidue])
+        residue_centroid_coords = np.array([list(np.mean(coords, axis=0)) for coords in coords_byresidue])
+        all_atom_coords = np.array(all_atom_coords)
+        return alpha_carbon_coords, residue_centroid_coords, all_atom_coords, coords_byresidue
 
     def run_pipeline(self,
                      struct_names,
                      pos_to_hybridize,
-                     align_structures=False
+                     align_structures=False,
+                     hybridize_structures=True,
                      ):
-        # get aligned structural info
-        struct_ali_csv = f'{self.pdb_dir}{self.data_fbase}/{struct_names[0]}_{struct_names[1]}_yasaraStructAli.csv'
-        pdb_hybridized_fpath = struct_ali_csv.replace('_yasaraStructAli.csv', '_hybrid.pdb')
-        if align_structures or not os.path.exists(struct_ali_csv):
-            struct_ali_csv = None
-        df_hybridized = self.get_aligned_structural_info(struct_ali_csv, struct_names)
+        if hybridize_structures:
+            # get aligned structural info
+            struct_ali_csv = f'{self.pdb_dir}{self.data_fbase}/{struct_names[0]}_{struct_names[1]}_yasaraStructAli.csv'
+            pdb_hybridized_fpath = struct_ali_csv.replace('_yasaraStructAli.csv', '_hybrid.pdb')
+            if align_structures or not os.path.exists(struct_ali_csv):
+                struct_ali_csv = None
+            df_hybridized = self.get_aligned_structural_info(struct_ali_csv, struct_names)
 
-        # hybridize PDBs
-        pos_to_hybridize_wrt_seq2, df_hybridized, atoms_df = self.hybridize_pdbs(df_hybridized, pos_to_hybridize, pdb_hybridized_fpath)
+            # hybridize PDBs
+            pos_to_hybridize_wrt_seq2, df_hybridized, atoms_df = self.hybridize_pdbs(df_hybridized, pos_to_hybridize, pdb_hybridized_fpath)
 
-        # minimize energy of hybridized structure
-        pdb_minimized_fpath = self.run_structural_energy_minimization(pdb_hybridized_fpath)
+            # minimize energy of hybridized structure
+            pdb_minimized_fpath = self.run_structural_energy_minimization(pdb_hybridized_fpath)
 
         # calculate average distance of selected residues to centroid for each structure:
         pdb_fnames = [
@@ -182,21 +183,43 @@ class ChimerizePDB:
             f'{struct_names[0]}_{struct_names[1]}_hybrid.pdb', # raw hybridized structure
             f'{struct_names[0]}_{struct_names[1]}_hybrid_minimized.pdb', # minimized hybridized structure
         ]
-        for i, pdb_fname in enumerate(pdb_fnames):
-            pdb_fpath = f'{self.pdb_dir}{self.data_fbase}/' + pdb_fname
-            avg_dist = self.compute_average_distance_to_centroid(pdb_fpath, pos_to_hybridize)
-            print(pdb_fname.split('.')[0], round(avg_dist,3))
-
+        f_list = []
+        pdb_fpaths = [f'{self.pdb_dir}{self.data_fbase}/' + pdb_fname for pdb_fname in pdb_fnames]
+        coords_dict = {}
+        for i, pdb_fpath in enumerate(pdb_fpaths):
+            f = os.path.basename(pdb_fpath).split('.')[0]
+            f_list.append(f)
+            print(f)
+            alpha_carbon_coords, residue_centroid_coords, all_atom_coords, coords_byresidue = self.parse_atom_coords_from_structure(pdb_fpath, pos_to_hybridize)
+            avg_distance_from_centroid = round(np.linalg.norm(all_atom_coords - all_atom_coords.mean(axis=0), axis=1).mean(),4)
+            print('avg_distance_from_centroid', avg_distance_from_centroid)
+            # update coords_dict
+            coords_dict[i] = {
+                'alpha_carbon_coords':alpha_carbon_coords,
+                'residue_centroid_coords':residue_centroid_coords,
+                'all_atom_coords':all_atom_coords,
+                'coords_byresidue':coords_byresidue
+            }
+            if i==2:
+                # backbone discrepancy
+                backbone_diff = {}
+                residue_centroid_diff = {}
+                for j in [0,1]:
+                    backbone_diff[j] = round(np.linalg.norm(coords_dict[2]['alpha_carbon_coords'] - coords_dict[j]['alpha_carbon_coords']).mean(),4)
+                    print(f'backbone diff vs [{j}] {f_list[j]}: {backbone_diff[j]}')
+                    residue_centroid_diff[j] = round(np.linalg.norm(coords_dict[2]['residue_centroid_coords'] - coords_dict[j]['residue_centroid_coords']).mean(), 4)
+                    print(f'residue centroid diff vs [{j}] {f_list[j]}: {residue_centroid_diff[j]}')
 
 if __name__ == '__main__':
     data_folder = address_dict['PIPS2']
     pdb_subfolder = subfolders['pdb']
     data_fbase = 'UPOpanel_selected'
-    struct_names = ['ET096', 'HspUPO']
+    struct_names = ['ET096', 'CviUPO']
     align_structures = True
+    hybridize_structures = False
     pos_to_hybridize = [38, 39, 60, 64, 70, 71, 73, 74, 75, 76, 77, 78, 79, 80, 81, 103, 171, 174, 175, 176, 177, 178, 179, 182, 218, 219, 220, 223]
 
     chimerize_pdbs = ChimerizePDB(data_folder, data_fbase)
-    chimerize_pdbs.run_pipeline(struct_names, pos_to_hybridize, align_structures)
+    chimerize_pdbs.run_pipeline(struct_names, pos_to_hybridize, align_structures, hybridize_structures)
 
 
