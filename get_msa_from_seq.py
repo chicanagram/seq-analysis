@@ -11,20 +11,21 @@ from plot_utils import visualize_msa
 
 def main():
     data_folder = address_dict['ECOHARVEST']
-    seq_dir = data_folder + subfolders['sequences']
-    msa_dir = data_folder + subfolders['msa']
-    seq_fname = 'CARs_litsearch.fasta' # 'CALA_UML_KLIP.fasta' # 'CALA_phmmer_uniprot_trembl_incE1e-03_E1e-03.fasta' #  'CALB_phmmer_uniprot_trembl_incE1e-03_E1e-03.fasta' # 'lipases_initialMSA.fasta' #
+    data_subfolder = 'lipases' # 'sidestream_cocktail' #
+    seq_dir = data_folder + subfolders['sequences'] + data_subfolder + '/'
+    msa_dir = data_folder + subfolders['msa'] + data_subfolder + '/'
+    seq_fname = 'RML_blastp_nr_E1e-05.fasta' # 'exoglucanase_TrichodermaHarzianum.fasta' # 'CARs_litsearch.fasta' #
     msa_method = 'mafft' # 'clustalo' #
     fname_suffix = '' # '_filt_trimmed' #
     msa_fname = seq_fname[:seq_fname.find('.fa')] + f'_{msa_method}' + fname_suffix + '.fasta'
-    get_msa = True
+    get_msa = True # False
     plot_msa = 'seaborn' # 'pymsaviz' # None #
     plot_msa_pos_range = None # [200,236] #
-    wrap_length = 120 # 400 # 600
+    wrap_length = 80 # 400 # 600
     filter_by_refseq = None # 0 #
-    label_residues = None # 'ref' # 'consensus' #
-    ytick_interval = 1 # 100
-    show_all_sequences = True
+    label_residues = 'ref' # None # 'ref' # 'consensus' #
+    ytick_interval = 100 # 1 #
+    show_all_sequences = False # True
     if ytick_interval==1:
         show_seq_names = True
     else:
@@ -32,7 +33,7 @@ def main():
     savefig = None
     if plot_msa_pos_range is None:
         fontsize = 8
-        xtick_interval = 20
+        xtick_interval = 5 # 20
     else:
         fontsize = 20
         xtick_interval = 5

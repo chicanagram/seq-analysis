@@ -40,7 +40,6 @@ subfolders = {
     'ohe': 'ohe/',
 }
 
-
 mapping = {
     'A': 'Ala',
     'H': 'His',
@@ -63,6 +62,29 @@ mapping = {
     'W': 'Trp',
     'V': 'Val'
     }
+
+mapping_rev = {
+    'ALA': 'A',
+    'HIS': 'H',
+    'TYR': 'Y',
+    'ARG': 'R',
+    'THR': 'T',
+    'LYS': 'K',
+    'MET': 'M',
+    'ASP': 'D',
+    'ASN': 'N',
+    'CYS': 'C',
+    'GLN': 'Q',
+    'GLU': 'E',
+    'GLY': 'G',
+    'ILE': 'I',
+    'LEU': 'L',
+    'PHE': 'F',
+    'PRO': 'P',
+    'SER': 'S',
+    'TRP': 'W',
+    'VAL': 'V'
+}
 
 aaList = list("ACDEFGHIKLMNPQRSTVWY")
 aaList_with_X = list("ACDEFGHIKLMNPQRSTVWYX")
@@ -91,4 +113,93 @@ amino_acid_groups = {
     "p~": ["Y", "C", "T", "S", "H", "Q", "N"],
     "p-": ["E", "D"],  # Acidic
     "p+": ["K", "R"]   # Basic
+}
+
+aa_to_cmap_color_mapping = {
+    'Clustal': {
+        '-': 0,  # Gaps
+        'A': 1, 'V': 1, 'L': 1, 'I': 1, 'M': 1, 'F': 1, 'W': 1, 'C': 1,  # Hydrophobic (Green)
+        'K': 2, 'R': 2,  # Positive charge (Blue)
+        'D': 3, 'E': 3,  # Negative charge (Red)
+        'S': 4, 'T': 4, 'N': 4, 'Q': 4,  # Polar (Cyan)
+        'Y': 5, 'H': 5,  # Aromatic (Magenta)
+        'G': 6,  # Glycine (Orange)
+        'P': 7,  # Proline (Yellow)
+        'X': 8
+    },
+    'Taylor': {
+        '-': 0,  # Gaps (Light Gray)
+        'A': 1, 'V': 1, 'L': 1, 'I': 1, 'M': 1,  # Hydrophobic (Green)
+        'F': 2, 'Y': 2, 'W': 2,  # Aromatic (Blue)
+        'K': 3, 'R': 3, 'H': 3,  # Positive Charge (Red)
+        'D': 4, 'E': 4,  # Negative Charge (Magenta)
+        'S': 5, 'T': 5, 'N': 5, 'Q': 5,  # Polar Uncharged (Cyan)
+        'C': 6,  # Cysteine (Yellow)
+        'G': 7,  # Glycine (Orange)
+        'P': 8,  # Proline (Brown)
+        'X': 9  # Ambiguous/Unknown (Black)
+    }
+}
+palettes = {
+    'Clustal': [
+        "#d3d3d3",  # Gaps (Light Gray)
+        "#32CD32",  # Hydrophobic (Green)
+        "#0000FF",  # Positive (Blue)
+        "#FF0000",  # Negative (Red)
+        "#00FFFF",  # Polar (Cyan)
+        "#FF00FF",  # Aromatic (Magenta)
+        "#FFA500",  # Glycine (Orange)
+        "#FFFF00",  # Proline (Yellow)
+        "#000000"  # Ambiguous (Black)
+    ],
+    'Taylor': [
+        "#D3D3D3",  # Gaps (Light Gray)
+        "#33FF00",  # Hydrophobic (Green)
+        "#0099FF",  # Aromatic (Blue)
+        "#FF0000",  # Positive Charge (Red)
+        "#CC00FF",  # Negative Charge (Magenta)
+        "#00FFFF",  # Polar Uncharged (Cyan)
+        "#FFFF00",  # Cysteine (Yellow)
+        "#FF9900",  # Glycine (Orange)
+        "#996633",  # Proline (Brown)
+        "#000000"  # Ambiguous (Black)
+    ],
+
+    'Taylor_yasara': [
+        "grey",  # Gaps (Light Gray)
+        "green",  # Hydrophobic (Green)
+        "blue",  # Aromatic (Blue)
+        "red",  # Positive Charge (Red)
+        "magenta",  # Negative Charge (Magenta)
+        "cyan",  # Polar Uncharged (Cyan)
+        "yellow",  # Cysteine (Yellow)
+        "orange",  # Glycine (Orange)
+        "brown",  # Proline (Brown)
+        "black"  # Ambiguous (Black)
+    ]
+}
+
+aa_taylor_colorcode_yasara = {
+    '-': 'grey',
+    'A': 'green',
+    'V': 'green',
+    'L': 'green',
+    'I': 'green',
+    'M': 'green',
+    'F': 'blue',
+    'Y': 'blue',
+    'W': 'blue',
+    'K': 'red',
+    'R': 'red',
+    'H': 'red',
+    'D': 'magenta',
+    'E': 'magenta',
+    'S': 'cyan',
+    'T': 'cyan',
+    'N': 'cyan',
+    'Q': 'cyan',
+    'C': 'yellow',
+    'G': 'orange',
+    'P': 'brown',
+    'X': 'black'
 }

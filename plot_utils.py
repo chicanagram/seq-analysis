@@ -187,6 +187,7 @@ def plot_msa_seaborn(msa_fpath, color_scheme='Taylor', plot_msa_pos_range=None,
         if show_seq_names:
             ax_row.set_yticks(np.arange(0, num_sequences, ytick_interval)+0.5)
             ax_row.set_yticklabels(seq_names, fontsize=10)
+            # annotate all sequences with positions at intervals
             if show_all_sequences:
                 for seq_num in range(num_sequences):
                     for res_idx, res in enumerate(msa_array_row[seq_num]):

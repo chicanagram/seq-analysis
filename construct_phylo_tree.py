@@ -13,34 +13,43 @@ models= ['identity', 'blastn', 'trans', 'benner6', 'benner22', 'benner74', 'blos
 
 # Input and output file paths
 data_folder = address_dict['ECOHARVEST']
-msa_fname = 'CARs_litsearch_mafft.fasta' #  'lipases_initialMSA_mafft.fasta' # 'CALB_phmmer_uniprot_trembl_incE=1e-03_E=1e-03_mafft.fasta'
-tree_model = 'identity' #'blosum62' #
+data_subfolder = 'sidestream_cocktail'
+msa_dir = data_folder + subfolders['msa'] + data_subfolder + '/'
+msa_fname = 'exoglucanase_TrichodermaHarzianum_mafft.fasta'
+tree_model = 'identity' # 'blosum62' #
+
 # Load the MSA from a FASTA file
-alignment = AlignIO.read(data_folder + subfolders['msa'] + msa_fname, "fasta")
-print(len(alignment))
+alignment = AlignIO.read(msa_dir + msa_fname, "fasta")
+seq_name_to_len = {}
+for i, rec in enumerate(alignment):
+    seq_name_to_len[rec.id] = (i, len(str(rec.seq).replace('-','')))
 
 # Calculate pairwise distances
 print('Calculating distances...')
 calculator = DistanceCalculator(tree_model)
 distance_matrix = calculator.get_distance(alignment)
-np.save(data_folder + msa_fname.replace('.fasta', '_distmat.npy'), distance_matrix)
+np.save(msa_dir + msa_fname.replace('.fasta', '_distmat.npy'), distance_matrix)
 print(distance_matrix)
 
 # Construct the phylogenetic tree using Neighbor-Joining (NJ)
 print('Constructing tree...')
 constructor = DistanceTreeConstructor()
 tree = constructor.nj(distance_matrix)
-# constructor = DistanceTreeConstructor(calculator)
-# tree = constructor.build_tree(alignment)
-print(tree)
+
+# modify labels of tree to add sequence length
+for clade in tree.get_terminals():
+    seq_name = clade.name
+    seq_name_shortened = seq_name.split('|')[0] + '|' + seq_name.split('|')[-1]
+    seq_name_wlen = f'{seq_name_shortened} {seq_name_to_len[seq_name]}'
+    clade.name = seq_name_wlen
 
 # # Visualize the phylogenetic tree
-fig = plt.figure(figsize=(6, 6), dpi=100) # create figure & set the size
+fig = plt.figure(figsize=(12, 6), dpi=100) # create figure & set the size
 plt.rc('font', size=12)             # fontsize of the leaf and node labels
 plt.rc('xtick', labelsize=10)       # fontsize of the tick labels
 plt.rc('ytick', labelsize=10)       # fontsize of the tick labels
 #turtle_tree.ladderize()		   # optional way to reformat your tree
 axes = fig.add_subplot(1, 1, 1)
 Phylo.draw(tree, axes=axes)
-fig.savefig(data_folder + subfolders['msa'] + msa_fname.replace('.fasta', '_phylo.png'), bbox_inches='tight')
+fig.savefig(msa_dir + msa_fname.replace('.fasta', '_phylo.png'), bbox_inches='tight')
 plt.show()

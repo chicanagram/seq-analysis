@@ -213,7 +213,7 @@ if __name__ == '__main__':
         'CviUPO.pdb',
         # 'DcaUPO.pdb', # 'HspUPO.pdb' # 'CE652.pdb'
     ]
-    seq_align_fpath = f'{msa_dir}{data_fbase}/{struct_fnames[0].split('.')[0]}_{struct_fnames[1].split('.')[0]}_yasaraStructAli.fasta'
+    seq_align_fpath = f'{msa_dir}{data_fbase}/{struct_fnames[0].split(".")[0]}_{struct_fnames[1].split(".")[0]}_yasaraStructAli.fasta'
     seq_fname = None
     output_msa_fpath = None
 
