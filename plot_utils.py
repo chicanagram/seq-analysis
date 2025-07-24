@@ -39,7 +39,7 @@ def get_consensus_scores(msa_array):
     return consensus_scores
 
 def plot_msa_seaborn(msa_fpath, color_scheme='Taylor', plot_msa_pos_range=None,
-                     wrap_length=300, xtick_interval=25, ytick_interval=100,
+                     wrap_length=300, xtick_interval=25, ytick_interval=100, pos_int_to_label=10,
                      show_seq_names=False, label_residues=None, show_all_sequences=False, fontsize=8, filter_by_refseq=None, savefig=None):
     import seaborn as sns
     from matplotlib.colors import ListedColormap, BoundaryNorm
@@ -194,7 +194,7 @@ def plot_msa_seaborn(msa_fpath, color_scheme='Taylor', plot_msa_pos_range=None,
                         if res != '-':
                             pos_counter_dict[seq_num] += 1
                             pos = pos_counter_dict[seq_num]
-                            if pos%10==0:
+                            if pos%pos_int_to_label==0:
                                 ax_row.annotate(str(pos)+'\n'+res, (res_idx, seq_num+0.5), fontsize=fontsize*0.75, c='k')
                             else:
                                 ax_row.annotate(''+'\n'+res, (res_idx, seq_num + 0.5), fontsize=fontsize * 0.75, c='k')
@@ -209,7 +209,7 @@ def plot_msa_seaborn(msa_fpath, color_scheme='Taylor', plot_msa_pos_range=None,
     plt.show()
 
 def visualize_msa(msa_fpath, how='seaborn', color_scheme='Taylor', plot_msa_pos_range=None,
-                  wrap_length=300, xtick_interval=25, ytick_interval=100,
+                  wrap_length=300, xtick_interval=25, ytick_interval=100, pos_int_to_label=10,
                   show_seq_names=False, label_residues=None, show_all_sequences=False, fontsize=8, filter_by_refseq=None, savefig=None):
     # get figure save name
     if savefig is None:
@@ -229,7 +229,7 @@ def visualize_msa(msa_fpath, how='seaborn', color_scheme='Taylor', plot_msa_pos_
     # visualize MSA using Seaborn
     elif how=='seaborn':
         plot_msa_seaborn(msa_fpath, color_scheme, plot_msa_pos_range,
-                         wrap_length, xtick_interval, ytick_interval,
+                         wrap_length, xtick_interval, ytick_interval, pos_int_to_label,
                          show_seq_names, label_residues, show_all_sequences, fontsize, filter_by_refseq, savefig)
 
 def symlog(data):

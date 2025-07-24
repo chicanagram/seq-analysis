@@ -8,7 +8,7 @@ from variables import address_dict, subfolders
 if __name__=='__main__':
     # Path to the FASTA file
     data_folder = address_dict['influenza-resistance']
-    data_subfolder = 'PA_benchmark_mod'
+    data_subfolder = 'PA-A37T-I38T' # 'PA_benchmark_mod'
     pdb_dir = data_folder + subfolders['pdb'] + data_subfolder + '/'
 
     folder_list = [
@@ -23,6 +23,7 @@ if __name__=='__main__':
         # 'PA-H1N1-WT_BXR_6fs6-F',
         # 'PA-H1N1-I38T_cpd23_8t6z',
         # 'PA-H1N1-WT_cpd23_8t94'
+        'PA-H3N2-Croatia10136RV-6FS6-C'
     ]
 
     yasara.info.mode = 'txt'
@@ -39,6 +40,7 @@ if __name__=='__main__':
 
     # clean up results folder
     sce_flist = [f for f in os.listdir(pdb_dir) if f.find('.sce')>-1]
+
     # save all SCE files as PDB in current folder
     for sce_fname in sce_flist:
         print(sce_fname)

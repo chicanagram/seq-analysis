@@ -203,3 +203,30 @@ aa_taylor_colorcode_yasara = {
     'P': 'brown',
     'X': 'black'
 }
+
+amino_acids_by_size = [
+    'G',  # Glycine
+    'A',  # Alanine
+    'S',  # Serine
+    'C',  # Cysteine
+    'D',  # Aspartic Acid
+    'N',  # Asparagine
+    'T',  # Threonine
+    'E',  # Glutamic Acid
+    'Q',  # Glutamine
+    'P',  # Proline
+    'V',  # Valine
+    'H',  # Histidine
+    'M',  # Methionine
+    'I',  # Isoleucine
+    'L',  # Leucine
+    'F',  # Phenylalanine
+    'Y',  # Tyrosine
+    'W',  # Tryptophan
+    'K',  # Lysine
+    'R'   # Arginine
+]
+
+hetatm_non_metal_ion = ['HEM', 'NAG']
+hetatm_metal_ion = [' MG', '  K', ' NA', ' MN', ' CA']
+hetatm_anion = [' CL']
