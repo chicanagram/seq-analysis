@@ -63,6 +63,18 @@ def get_dssp_properties(pdb_fpath, data_fbase):
         print(f'Removed chain id {id}.')
     num_res = len(list(model[protein_chain_id].get_residues()))
 
+    # remove any extra remark lines which could cause an error when DSSP parses the file
+    with open(pdb_fpath, 'r') as f:
+        lines = f.readlines()
+        lines_cleaned = []
+        for l in lines:
+            if l[:6]!='REMARK':
+                lines_cleaned.append(l)
+    if len(lines_cleaned)<len(lines):
+        with open(pdb_fpath, 'w') as f:
+            f.writelines(lines_cleaned)
+        print('Re-saved cleaned up PDB file.')
+
     # get DSSP properties for each residue
     dssp = DSSP(model, pdb_fpath, dssp='mkdssp')
     dssp_res = []
@@ -73,13 +85,42 @@ def get_dssp_properties(pdb_fpath, data_fbase):
         dssp_res.append(res_dict)
     dssp_res = pd.DataFrame(dssp_res)
 
+    # append individual structure columns
+    # H = α-helix
+    # B = residue in isolated β-bridge
+    # E = extended strand, participates in β ladder;
+    # G = 310-helix;
+    # I = π-helix;
+    # P = κ-helix (poly-proline II helix);
+    # T = hydrogen-bonded turn;
+    # S = bend
+    for ss_feature in ['H', 'B', 'E', 'G', 'I', 'P', 'T', 'S']:
+        col = 'ss_'+ss_feature
+        dssp_res[col] = 1*(dssp_res['secondary_structure']==ss_feature).to_numpy()
     return dssp_res
-def calc_res_to_lig_distances(pdb_fpath, chain_id='A', ligand_resname='UNK'):
 
+def calc_SASA_biopython(pdb_fpath, data_fbase):
+    from Bio.PDB.SASA import ShrakeRupley
+    p = PDBParser(QUIET=1)
+    # This assumes you have a local copy of 1LCD.pdb in a directory called "PDB"
+    struct = p.get_structure(data_fbase, pdb_fpath)
+    # residue level SASA
+    sr_residue = ShrakeRupley()
+    sr_residue.compute(struct, level="R")
+    sasa_residues = []
+    num_residues = len(struct[0]["A"])
+    for i in range(1,num_residues+1):
+        residue_id = (" ", i, " ")
+        sasa_residues.append(round(struct[0]["A"][residue_id].sasa, 2))
+    sasa_residues = np.array(sasa_residues)
+    sasa_residues_sum = np.sum(sasa_residues)
+    print('Total SASA:', sasa_residues_sum)
+    return np.array(sasa_residues)
+
+def calc_res_to_lig_distances(pdb_fpath, chain_id='A', ligand_resname='UNK'):
     # Parse PDB structure
     parser = PDBParser(QUIET=True)
     structure = parser.get_structure('protein', pdb_fpath)
-    model = structure[0]
 
     # Select ligand atoms
     ligand_atoms = []
@@ -113,10 +154,11 @@ def calc_res_to_lig_distances(pdb_fpath, chain_id='A', ligand_resname='UNK'):
                             avg_dist_res_atom_to_target = np.mean(np.array(dist_res_atom_to_all_target_atoms))
                             avg_distances.append(avg_dist_res_atom_to_target)
                             min_distances.append(min(dist_res_atom_to_all_target_atoms))
-                    distance_results.append({'RealPos':res_id[1], 'aa': aa, f'min_distance_to_{ligand_resname}':min(min_distances), f'avg_distance_{ligand_resname}':min(avg_distances)})
+                    distance_results.append({'RealPos':res_id[1], 'aa': aa, f'min_distance_{ligand_resname}':min(min_distances), f'avg_distance_{ligand_resname}':min(avg_distances)})
 
     distance_results = pd.DataFrame(distance_results)
     return distance_results
+
 
 def get_remaining_positions_residues(struct_df):
     filt_pos = struct_df["RealPos"].tolist()
@@ -127,17 +169,24 @@ def get_remaining_positions_residues(struct_df):
 
 if __name__ == '__main__':
     # input settings
-    data_folder = address_dict['PIPS2'] # address_dict['ECOHARVEST'] #
-    data_fbase = 'ET096' # 'lipases' #
-    pdb_fname =  'Docked_ET096_S82.pdb'  # 'Docked_RML_OleicAcid_preOpt.pdb' # # 'ETS83096.pdb' #
-    ligand_resname_list =  ['UNK'] # ['HEM', 'UNK'] #
-    conservation_analysis_fname = 'ET096_UPO_aligned_clustalo_sift_selected.csv' # 'RML_blastp_nr_E1e-05_mafft_sift_selected.csv'
+    os.chdir('../')
+    data_folder = address_dict['ECOHARVEST'] # address_dict['PIPS2'] #
+    data_fbase = 'CARs' # 'lipases' # 'ET096' #  'CviUPO' #
+    pdb_fname = 'Boltz2_MpCAR-A_Oleoyl-AMP.pdb' # 'Docked_RMLmut_SucroseOleate_Chai.pdb' # 'Docked_ET096_ABTS.pdb' # 'MpCAR-A_Cinnamoyl-AMP.pdb' # 'Docked_CviUPO_S82.pdb'  # 'Docked_RML_OleicAcid_preOpt.pdb' # # 'ETS83096.pdb' #
+    ligand_resname_list =  ['LIG'] # ['HEM', 'UNK'] #  ['LIG'] # ['UNK'] #
+    ligname = 'Oleoyl-AMP' # 'SucroseOleate' # 'ABTS'
+    conservation_analysis_fname = None # 'ET096_UPO_aligned_clustalo_sift_selected.csv' # 'RML_blastp_nr_E1e-05_mafft_sift_selected.csv'
     pdb_fpath = f"{data_folder}{subfolders['pdb']}{data_fbase}/{pdb_fname}"
-    conservation_analysis_fpath = f"{data_folder}{subfolders['conservation_analysis']}{data_fbase}/{conservation_analysis_fname}"
+    conservation_analysis_fpath = None if conservation_analysis_fname is None else f"{data_folder}{subfolders['conservation_analysis']}{data_fbase}/{conservation_analysis_fname}"
+    pos_offset = 0
 
     # get residue to ligand distances
-    for ligand_resname in ligand_resname_list:
-        struct_df = calc_res_to_lig_distances(pdb_fpath, chain_id='A', ligand_resname=ligand_resname)
+    for k, ligand_resname in enumerate(ligand_resname_list):
+        struct_df_lig = calc_res_to_lig_distances(pdb_fpath, chain_id='A', ligand_resname=ligand_resname)
+        if k==0:
+            struct_df = struct_df_lig.copy()
+        else:
+            struct_df = pd.concat([struct_df, struct_df_lig[[f'min_distance_{ligand_resname}',f'avg_distance_{ligand_resname}']]], axis=1)
 
     # # get residue to surface distances, and surface patches
     # surfdist = yasara_get_surface_residues(pdb_fpath, surft=2.55, distt=12, minepisize=13)
@@ -155,27 +204,34 @@ if __name__ == '__main__':
         struct_df = struct_df.merge(conservation_df, on='RealPos', how='left')
 
     struct_df = struct_df.round(3)
+
+    # add position offset if needed
+    if pos_offset>0:
+        pos_list = struct_df['RealPos'].tolist()
+        pos_list = [pos+pos_offset for pos in pos_list]
+        struct_df['RealPos'] = pos_list
     print(struct_df)
-    struct_df.to_csv(f"{data_folder}{subfolders['pdb']}{data_fbase}/{data_fbase}_StructProperties.csv")
+    struct_df.to_csv(f"{data_folder}{subfolders['pdb']}{data_fbase}/{data_fbase}_StructProperties_vs{ligname}.csv")
 
     # filter
-    conservation_score_label = 'sift_avg'
-    frac_positions_to_exclude = 0.15
-    dist_to_ligand_thres = 6.65
-    pos_suffix = 'A'
-    conservation_scores_sorted = np.sort(struct_df[conservation_score_label].to_numpy())
-    num_positions_to_exclude = int(frac_positions_to_exclude*len(conservation_scores_sorted))
-    conservation_score_thres = conservation_scores_sorted[num_positions_to_exclude]
-    print('\n# of positions to exclude by conservation:', f'{num_positions_to_exclude}/{len(conservation_scores_sorted)}', '; conservation score threshold:', conservation_score_thres)
-    struct_df_filt = struct_df.copy()
-    struct_df_filt = struct_df_filt.loc[(struct_df_filt['min_distance_to_UNK']<dist_to_ligand_thres)]
-    filt_pos_1, filt_res_1 = get_remaining_positions_residues(struct_df_filt)
-    print('\n', f'{len(filt_pos_1)} positions after filtering for ligand distance.', *filt_pos_1)
-    struct_df_filt = struct_df_filt.loc[(struct_df_filt[conservation_score_label] > conservation_score_thres)]
-    filt_pos_2, filt_res_2 = get_remaining_positions_residues(struct_df_filt)
-    print('\n', f'{len(filt_pos_2)} positions after filtering for ligand distance and conservation.', *[str(pos)+pos_suffix for pos in filt_pos_2])
-    print('\n', f'{len(filt_pos_1)-len(filt_pos_2)} conserved positions removed:', *[pos for pos in filt_pos_1 if pos not in filt_pos_2])
-    print(*[res for res in filt_res_1 if res not in filt_res_2])
+    if conservation_analysis_fpath is not None:
+        conservation_score_label = 'sift_avg'
+        frac_positions_to_exclude = 0.2
+        dist_to_ligand_thres = 6.6
+        pos_suffix = 'A'
+        conservation_scores_sorted = np.sort(struct_df[conservation_score_label].to_numpy())
+        num_positions_to_exclude = int(frac_positions_to_exclude*len(conservation_scores_sorted))
+        conservation_score_thres = conservation_scores_sorted[num_positions_to_exclude]
+        print('\n# of positions to exclude by conservation:', f'{num_positions_to_exclude}/{len(conservation_scores_sorted)}', '; conservation score threshold:', conservation_score_thres)
+        struct_df_filt = struct_df.copy()
+        struct_df_filt = struct_df_filt.loc[(struct_df_filt['min_distance_UNK']<dist_to_ligand_thres)]
+        filt_pos_1, filt_res_1 = get_remaining_positions_residues(struct_df_filt)
+        print('\n', f'{len(filt_pos_1)} positions after filtering for ligand distance.', *filt_pos_1)
+        struct_df_filt = struct_df_filt.loc[(struct_df_filt[conservation_score_label] > conservation_score_thres)]
+        filt_pos_2, filt_res_2 = get_remaining_positions_residues(struct_df_filt)
+        print('\n', f'{len(filt_pos_2)} positions after filtering for ligand distance and conservation.', *[str(pos)+pos_suffix for pos in filt_pos_2])
+        print('\n', f'{len(filt_pos_1)-len(filt_pos_2)} conserved positions removed:', *[pos for pos in filt_pos_1 if pos not in filt_pos_2])
+        print(*[res for res in filt_res_1 if res not in filt_res_2])
 
 
 

@@ -40,25 +40,35 @@ def one_hot_encode_sequences(sequences, max_length=None):
     return np.array(encoded_seqs, dtype=np.float32)
 
 def main():
-    data_folder = address_dict['PON-Sol2']
-    input_fname = 'ponsol2_all_rev.csv'
-    output_fname = 'ohe_rev.npz'
-    ohe_subfolder = subfolders['ohe']
-    df = pd.read_csv(data_folder + input_fname)
+    data_folder = address_dict['PIPS2'] # address_dict['PIPS'] # address_dict['PON-Sol2']
+    data_subfolder = 'ET096_mutagenesis_Lib2&3&NNK' # 'GOh1052_mutagenesis' # '''ET096_mutagenesis_Round3-batch1' # 'ET096_mutagenesis_purified_activity' #
+    input_fname = 'ET096_mutagenesis_Lib2&3&NNK.csv' # 'GOh1052_mutagenesis.csv' # 'ET096_mutagenesis_Round3-batch1.csv' # 'ET096_mutagenesis_purified_activity.csv'
+    output_fname = 'ohe.npz' # 'ohe_rev.npz'
+    ohe_dir = data_folder + subfolders['ohe'] + data_subfolder + '/'
+    df = pd.read_csv(data_folder + subfolders['expdata'] + data_subfolder + '/' + input_fname)
     sequence_base_list = df['sequence_base'].tolist()
+    sequence_base = sequence_base_list[0]
     sequence_list = df['sequence'].tolist()
     seq_base_ohe = one_hot_encode_sequences(sequence_base_list)
     seq_ohe = one_hot_encode_sequences(sequence_list)
     ohe_3D = np.concatenate((seq_base_ohe,seq_ohe), axis=1)
     ohe = ohe_3D.reshape(ohe_3D.shape[0], ohe_3D.shape[1]*ohe_3D.shape[2])
-    # W = seq_ohe.shape[1]
-    # cols = [f'{i}_{aa}_{WT_or_MT}' for WT_or_MT in ['WT','MT'] for i in range(1,W+1) for aa in aaList]
-    # ohe_df = pd.DataFrame(ohe, columns=cols, index=df['name'].tolist())
+    W = seq_ohe.shape[1]
+    cols = [f'{i+1}_{aa}_{WT_or_MT}' for WT_or_MT in ['WT','MT'] for i,wt_aa in enumerate(sequence_base) for aa in aaList]
+    colsMT = [f'{wt_aa}{i+1}{aa}' for i,wt_aa in enumerate(sequence_base) for aa in aaList]
+    ohe_df = pd.DataFrame(ohe, columns=cols, index=df['name'].tolist())
+    print(colsMT)
 
     # Convert to sparse format
+    # WT and MT
     ohe_sparse = sp.csr_matrix(ohe)
-    # Save to file
-    sp.save_npz(data_folder + ohe_subfolder + output_fname, ohe_sparse)
+    sp.save_npz(ohe_dir + output_fname, ohe_sparse)
+    print('OHE shape:', ohe_sparse.shape)
+    # MT only
+    oheMT_sparse = sp.csr_matrix(ohe[:, int(len(cols)/2):])
+    print('OHE(MT) shape:', oheMT_sparse.shape)
+    sp.save_npz(ohe_dir + output_fname.replace('.npz','MT.npz'), oheMT_sparse)
+
 
 if __name__ == "__main__":
     main()

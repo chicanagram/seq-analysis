@@ -88,6 +88,7 @@ def convert_msa_format(input_file, input_fmt='fas', output_fmt='a3m', msa_dir=''
     print()
 
 if __name__=='__main__':
+    os.chdir('../')
     data_folder = address_dict['PON-Sol2'] # address_dict['ECOHARVEST'] #
     msa_dir = data_folder + subfolders['msa']
     from_perl_or_python = 'perl'

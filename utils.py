@@ -547,7 +547,7 @@ def run_msa(seq_fname, msa_fname, method, seq_dir, msa_dir, fmt='fasta', seed_al
     out_file = f'{msa_dir}{msa_fname}'
 
     if method=='mafft':
-        mafft  = './msa/mafft-mac/mafft.bat'
+        mafft  = './align/msa/mafft-mac/mafft.bat'
         if seed_ali is None:
             mafft_command = f'{mafft} {in_file} > {out_file}'
         else:
@@ -559,7 +559,7 @@ def run_msa(seq_fname, msa_fname, method, seq_dir, msa_dir, fmt='fasta', seed_al
         import subprocess
         seq_fasta_fpath = os.path.abspath(f'{seq_dir}{seq_fname}')
         msa_fpath = os.path.abspath(f'{msa_dir}{msa_fname}')
-        clustalo_fpath = os.path.abspath(f'./msa/clustalo/clustalo.exe')
+        clustalo_fpath = os.path.abspath(f'./align/msa/clustalo/clustalo.exe')
         cmd = f'{clustalo_fpath} -i {seq_fasta_fpath} -o {msa_fpath} --force'
         msa_file = open(msa_fpath, 'w')
         subprocess.run(cmd, stdout=msa_file, encoding="utf8")
@@ -584,6 +584,44 @@ def calculate_sequence_identity(seq1, seq2):
         return 0  # Avoid division by zero
 
     return (matches / length) * 100
+
+
+def get_mutations_on_sk_wrt_s0(seq_ali, mutations_ref_s0, reorder_seqs=None):
+    '''
+    # Given a sequence alignment, convert mutations
+    # indexed in terms of one sequence's residue positions
+    # to another sequence's residue positions
+    '''
+    if isinstance(seq_ali, str):
+        # convert MSA to sequence tuple
+        seq_ali, _, _ = fetch_sequences_from_fasta(seq_ali)
+
+    if reorder_seqs is not None:
+        seq_ali_ = [seq_ali[i] for i in reorder_seqs]
+        seq_ali = seq_ali_
+
+    seq_ref_list = []
+    for i in range(len(seq_ali)):
+        seq_ref_list.append(seq_ali[i].replace('-', ''))
+
+    mutations_conversion = {mut_s0: [] for mut_s0 in mutations_ref_s0}
+    for mut_s0 in mutations_ref_s0:
+        print(mut_s0, '(s0)', end='')
+        for k in range(1, len(seq_ali)):
+            # get residue index
+            res_ref_s0 = int(mut_s0[1:-1])
+            idx_ref_s0 = res_ref_s0 - 1
+            # get alignment position corresponding to mutation
+            idx_ali = seq_ali[0][:idx_ref_s0].count('-') + idx_ref_s0
+            # get position corresponding to s1
+            idx_ref_sk = idx_ali - seq_ali[k][:idx_ali].count('-')
+            res_ref_sk = idx_ref_sk + 1
+            mut_sk = seq_ref_list[k][idx_ref_sk] + str(res_ref_sk) + mut_s0[-1]
+            mutations_conversion[mut_s0].append(mut_sk)
+            print(f' <> {mut_sk} (s{k})', end='')
+            if k==len(seq_ali)-1:
+                print()
+    return mutations_conversion
 
 def filter_and_save_sequences(input_fasta, reference_id=0, inequality='<', id_threshold=90, len_threshold=None, output_filtered_fasta=None, msa_dir='./', seq_dir='./'):
     """

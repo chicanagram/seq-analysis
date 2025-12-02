@@ -32,6 +32,7 @@ subfolders = {
     'seqsearch': 'seqsearch/',
     'protein_embeddings': 'protein_embeddings/',
     'expdata': 'expdata/',
+    'mutagenesis_proposal': 'mutagenesis_proposal/',
     'solubility': 'solubility/',
     'camsol': 'camsol/',
     'deepsolue': 'deepsolue/',

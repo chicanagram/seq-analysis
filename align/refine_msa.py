@@ -14,6 +14,7 @@ def run_pycdhit(data_folder, seq_fname, thres):
 
 
 def main():
+    os.chdir('../')
     data_folder = address_dict['ECOHARVEST']
     msa_dir = data_folder + subfolders['msa']
     seq_dir = data_folder + subfolders['sequences']

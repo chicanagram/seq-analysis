@@ -11,14 +11,14 @@ from plot_utils import visualize_msa
 
 def main():
     data_folder = address_dict['ECOHARVEST']
-    data_subfolder = 'lipases' # 'sidestream_cocktail' #
+    data_subfolder = 'CARs' # 'sidestream_cocktail' #
     seq_dir = data_folder + subfolders['sequences'] + data_subfolder + '/'
     msa_dir = data_folder + subfolders['msa'] + data_subfolder + '/'
     seq_fname = 'RML_ali.fasta' # 'RML-propeptide-mature_blastp_nr_E1e-05.fasta' # 'exoglucanase_TrichodermaHarzianum.fasta' # 'CARs_litsearch.fasta' #
     msa_method = 'mafft' # 'clustalo' #
     fname_suffix = '' # '_filt_trimmed' #
-    msa_fname = seq_fname[:seq_fname.find('.fa')] + f'_{msa_method}' + fname_suffix + '.fasta'
-    get_msa = True # False
+    msa_fname = 'MmCAR-A_NiCAR_MpCAR-A.fasta' # seq_fname[:seq_fname.find('.fa')] + f'_{msa_method}' + fname_suffix + '.fasta'
+    get_msa = False # True #
     plot_msa = 'seaborn' # 'pymsaviz' # None #
     plot_msa_pos_range = None # [200,236] #
     wrap_length = 100 # 400 # 600

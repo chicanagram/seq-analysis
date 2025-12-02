@@ -17,10 +17,10 @@ data_folder = address_dict['ECOHARVEST']
 sequence_subfolder = subfolders['sequences']
 msa_subfolder = subfolders['msa']
 patents_subfolder = subfolders['patents']
-seq_name_base_list = ['MmCAR'] # ['CALB', 'CALA', 'RML', 'TLL', 'BSL', 'UML', 'TCL'] #
-overall_results_fname_prefix = 'CAR' # 'Lipase' #
+seq_name_base_list = ['CALB', 'CALA', 'RML', 'TLL', 'BSL', 'UML', 'TCL'] # ['MmCAR'] #
+overall_results_fname_prefix = 'Lipase' # 'CAR' #
 parse_patent_search_results = False
-scrape_patent_details = True
+scrape_patent_details = False
 analyse_patent_search_results = True
 filter_hits = {'percent_identity':50, 'query_cover':30, 'seq_len':50}
 
@@ -200,10 +200,13 @@ if analyse_patent_search_results:
     patent_analysis = []
     # load results
     df = pd.read_csv(data_folder+patents_subfolder+overall_results_fname_prefix+'_patent_hits_all.csv', index_col=0)
+    print(df)
     # filter results on sequence identity, length, query cover conditions
     df_filt = df.copy()
     for col_to_filter, thres_to_filter in filter_hits.items():
         df_filt = df_filt[df_filt[col_to_filter]>thres_to_filter]
+    # filter by num_mutations
+    df_filt = df_filt[df_filt['num_mutations']<50]
     # remove duplicates sequences
     df_filt = df_filt.drop_duplicates(subset=['sequence'])
 
@@ -254,7 +257,7 @@ if analyse_patent_search_results:
         all_residues.sort()
         mut_dict_str = []
         for res in all_residues:
-            res_row = f'{mut_dict[res][0]}:{','.join(sort_list(mut_dict[res][1]))}'
+            res_row = f'{mut_dict[res][0]}:{".".join(sort_list(mut_dict[res][1]))}'
             mut_dict_str.append(res_row)
         print(f'Total # of entries: {num_hits}')
         print(f'Total # unique patents: {num_patents}')
@@ -285,6 +288,7 @@ if analyse_patent_search_results:
     df_filt.reset_index(drop=True).to_csv(data_folder + patents_subfolder + overall_results_fname_prefix+'_patent_hits_all_filtered.csv')
 
     # save patent analysis csv
-    patent_analysis = pd.DataFrame(patent_analysis).sort_values(by='query_seq')
-    patent_analysis.reset_index(drop=True).to_csv(data_folder+patents_subfolder+overall_results_fname_prefix+'_patent_analysis_all_filtered.csv')
+    patent_analysis = pd.DataFrame(patent_analysis)
     print(patent_analysis)
+    patent_analysis = patent_analysis.sort_values(by='query_seq')
+    patent_analysis.reset_index(drop=True).to_csv(data_folder+patents_subfolder+overall_results_fname_prefix+'_patent_analysis_all_filtered.csv')
