@@ -13,6 +13,8 @@ except ImportError as e:
 import numpy as np
 import os, sys
 import platform
+import subprocess
+from pathlib import Path
 from Bio import SeqIO
 from Bio.Seq import Seq
 from Bio import Align
@@ -289,6 +291,28 @@ def get_sequences_in_folder(seq_fnames, seq_dir=f'{data_folder}{sequences_subfol
             print(j, record.id, record.description, record.seq)
             sequence_list.append(record.seq)
     return sequence_list
+
+def run_tmalign(pdb_a, pdb_b, tmalign_exe='../TMalign-20180426/TMalign'):
+    """
+    Run TMalign on two PDB files.
+    Args:
+        pdb_a: First PDB filepath
+        pdb_b: Second PDB filepath
+        tmalign_exe: Path to TMalign executable (e.g., "./TMalign" or "/path/to/TMalign")
+    Returns:
+        subprocess.CompletedProcess with stdout/stderr as strings.
+    """
+    tmalign_exe = str(Path(tmalign_exe))
+    pdb_a = str(Path(pdb_a))
+    pdb_b = str(Path(pdb_b))
+    cmd = [tmalign_exe, pdb_a, pdb_b]
+    res = subprocess.run(cmd, capture_output=True, text=True, check=True)
+    stdout = res.stdout
+    # parse TM score
+    tmscore = float(stdout[stdout.find('TM-score= ')+10:stdout.find(' (if normalized by length of Chain_1')])
+    return tmscore
+
+
 
 def run_pairwise_alignment(seq1, seq2,
                            mode='global', match_score=2, mismatch_score=-1,

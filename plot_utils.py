@@ -1,4 +1,5 @@
 import numpy as np
+import pandas as pd
 import matplotlib.pyplot as plt
 from collections import Counter
 
@@ -40,7 +41,8 @@ def get_consensus_scores(msa_array):
 
 def plot_msa_seaborn(msa_fpath, color_scheme='Taylor', plot_msa_pos_range=None,
                      wrap_length=300, xtick_interval=25, ytick_interval=100, pos_int_to_label=10,
-                     show_seq_names=False, label_residues=None, show_all_sequences=False, fontsize=8, filter_by_refseq=None, savefig=None):
+                     show_seq_names=False, label_residues=None, show_all_sequences=False, fontsize=8, filter_by_refseq_or_idx=None,
+                     savefig=None, figsize=(25,20)):
     import seaborn as sns
     from matplotlib.colors import ListedColormap, BoundaryNorm
     from Bio import AlignIO
@@ -107,18 +109,38 @@ def plot_msa_seaborn(msa_fpath, color_scheme='Taylor', plot_msa_pos_range=None,
     seq_names = [record.id for record in alignment]
     # Convert MSA to a NumPy array
     msa_array = np.array([list(record.seq) for record in alignment])
+    msa_df = pd.DataFrame(np.transpose(msa_array), columns=seq_names)
+    # Add residue numbers for each sequence
+    for seq in seq_names:
+        resnum = 0
+        resnum_list = []
+        aa_list = msa_df[seq].tolist()
+        for aa in aa_list:
+            if aa != '-':
+                resnum += 1
+                resnum_list.append(resnum)
+            else:
+                resnum_list.append(None)
+        msa_df[f'{seq}_resnum'] = resnum_list
+    print(msa_df)
 
     # filter MSA positions by reference sequence
-    if filter_by_refseq is not None:
-        ref_seq = list(msa_array[filter_by_refseq, :])
-        idx_notgap = [i for i, x in enumerate(ref_seq) if x != '-']
-        print(len(idx_notgap), idx_notgap)
-        msa_array = msa_array[:, idx_notgap]
-        ref_seq = np.array(ref_seq)[idx_notgap]
+    if filter_by_refseq_or_idx is not None:
+        print('filter_by_refseq_or_idx:', filter_by_refseq_or_idx)
+        # filter by column with refseq name
+        if isinstance(filter_by_refseq_or_idx, str):
+            msa_df = msa_df.loc[msa_df[filter_by_refseq_or_idx]!='-', :]
+            ref_seq = list(msa_df[filter_by_refseq_or_idx])
+            print('Ref Seq:', ''.join(ref_seq))
+        # filter by alignment indices
+        elif isinstance(filter_by_refseq_or_idx, list):
+            msa_df = msa_df.loc[filter_by_refseq_or_idx, :]
+    msa_array = msa_df[seq_names].transpose().to_numpy()
 
     # label residues to annotate (i.e. consensus sequence or reference sequence)
     consensus_seq = np.array(get_consensus_sequence(msa_array))
-    if label_residues == 'ref' and filter_by_refseq is not None:
+
+    if label_residues == 'ref' and isinstance(filter_by_refseq_or_idx,str):
         annotate_seq = ref_seq
         diff_seq = [consensus_aa if consensus_aa!=ref_aa else '' for consensus_aa, ref_aa in zip(consensus_seq, ref_seq)]
     else:
@@ -147,7 +169,7 @@ def plot_msa_seaborn(msa_fpath, color_scheme='Taylor', plot_msa_pos_range=None,
     pos_counter_dict = {seq_num:0 for seq_num in range(len(seq_names))}
 
     # Plot heatmap of MSA using Seaborn
-    fig, ax = plt.subplots(num_rows, 1, figsize=(25,20))
+    fig, ax = plt.subplots(num_rows, 1, figsize=figsize)
 
     # plot MSA row by row
     for row_idx in range(num_rows):
@@ -161,7 +183,8 @@ def plot_msa_seaborn(msa_fpath, color_scheme='Taylor', plot_msa_pos_range=None,
             start_pos = row_idx*wrap_length
             end_pos = min((row_idx+1)*wrap_length, msa_len)
             row_len = end_pos-start_pos
-        msa_array_row = msa_array[:,start_pos:end_pos]
+        msa_df_row = msa_df.iloc[start_pos:end_pos, :]
+        msa_array_row = msa_array[:, start_pos:end_pos]
         msa_numeric_row = msa_numeric[:,start_pos:end_pos]
         annotate_seq_row = annotate_seq[start_pos:end_pos]
         diff_seq_row = diff_seq[start_pos:end_pos]
@@ -176,7 +199,8 @@ def plot_msa_seaborn(msa_fpath, color_scheme='Taylor', plot_msa_pos_range=None,
         # add tick labels
         ax_row.set_xticks(np.arange(0, row_len, xtick_interval))
         ax_row.set_xticklabels(np.arange(start_pos+1, end_pos+1, xtick_interval)+start_pos_offset, fontsize=fontsize)
-        # annotate sequence
+
+        # annotate ref or consensus sequence at the top
         if label_residues is not None:
             for res_idx, (res, diff_res) in enumerate(zip(annotate_seq_row, diff_seq_row)):
                 if res!='':
@@ -187,17 +211,24 @@ def plot_msa_seaborn(msa_fpath, color_scheme='Taylor', plot_msa_pos_range=None,
         if show_seq_names:
             ax_row.set_yticks(np.arange(0, num_sequences, ytick_interval)+0.5)
             ax_row.set_yticklabels(seq_names, fontsize=10)
+
             # annotate all sequences with positions at intervals
             if show_all_sequences:
-                for seq_num in range(num_sequences):
-                    for res_idx, res in enumerate(msa_array_row[seq_num]):
-                        if res != '-':
-                            pos_counter_dict[seq_num] += 1
-                            pos = pos_counter_dict[seq_num]
-                            if pos%pos_int_to_label==0:
-                                ax_row.annotate(str(pos)+'\n'+res, (res_idx, seq_num+0.5), fontsize=fontsize*0.75, c='k')
-                            else:
-                                ax_row.annotate(''+'\n'+res, (res_idx, seq_num + 0.5), fontsize=fontsize * 0.75, c='k')
+                for seq_num, seq in enumerate(seq_names):
+                    if filter_by_refseq_or_idx is None or isinstance(filter_by_refseq_or_idx, str):
+                        for res_idx, res in enumerate(msa_array_row[seq_num]):
+                            if res != '-':
+                                pos_counter_dict[seq_num] += 1
+                                pos = pos_counter_dict[seq_num]
+                                if pos%pos_int_to_label==0:
+                                    ax_row.annotate(str(pos)+'\n'+res, (res_idx, seq_num+0.5), fontsize=fontsize*0.75, c='k')
+                                else:
+                                    ax_row.annotate(''+'\n'+res, (res_idx, seq_num + 0.5), fontsize=fontsize * 0.75, c='k')
+                    elif isinstance(filter_by_refseq_or_idx, list):
+                        for res_idx, res in enumerate(msa_array_row[seq_num]):
+                            if res != '-':
+                                pos = int(msa_df_row.iloc[res_idx][f'{seq}_resnum'])
+                                ax_row.annotate(str(pos) + '\n' + res, (res_idx, seq_num + 0.5), fontsize=fontsize * 0.75, c='k')
         else:
             ax_row.set_yticks(np.arange(0, num_sequences, ytick_interval))
             ax_row.set_yticklabels(np.arange(0, num_sequences, ytick_interval), fontsize=10)
@@ -210,7 +241,8 @@ def plot_msa_seaborn(msa_fpath, color_scheme='Taylor', plot_msa_pos_range=None,
 
 def visualize_msa(msa_fpath, how='seaborn', color_scheme='Taylor', plot_msa_pos_range=None,
                   wrap_length=300, xtick_interval=25, ytick_interval=100, pos_int_to_label=10,
-                  show_seq_names=False, label_residues=None, show_all_sequences=False, fontsize=8, filter_by_refseq=None, savefig=None):
+                  show_seq_names=False, label_residues=None, show_all_sequences=False, fontsize=8,
+                  filter_by_refseq_or_idx=None, savefig=None, figsize=(25,20)):
     # get figure save name
     if savefig is None:
         savefig = msa_fpath.replace('.fasta','.png')
@@ -230,7 +262,7 @@ def visualize_msa(msa_fpath, how='seaborn', color_scheme='Taylor', plot_msa_pos_
     elif how=='seaborn':
         plot_msa_seaborn(msa_fpath, color_scheme, plot_msa_pos_range,
                          wrap_length, xtick_interval, ytick_interval, pos_int_to_label,
-                         show_seq_names, label_residues, show_all_sequences, fontsize, filter_by_refseq, savefig)
+                         show_seq_names, label_residues, show_all_sequences, fontsize, filter_by_refseq_or_idx, savefig, figsize)
 
 def symlog(data):
     idx_pos = np.where(data > 0)
@@ -373,7 +405,7 @@ def heatmap(array, c='viridis', ax=None, cbar_kw={}, cbarlabel="", datamin=None,
 
     return im, cbar, ax
 
-def plot_variant_heatmap(arr, seq, N_res_per_heatmap_row, aaList, seq_name=None, savefig=None, figtitle=None):
+def plot_variant_heatmap(arr, seq, N_res_per_heatmap_row, aaList, seq_name=None, savefig=None, figtitle=None, width_per_res=4):
     import matplotlib.pyplot as plt
     # Visualize the heatmaps
     seq_len = len(seq)
@@ -381,7 +413,7 @@ def plot_variant_heatmap(arr, seq, N_res_per_heatmap_row, aaList, seq_name=None,
     num_heatmaps = int(np.ceil(seq_len / N_res_per_heatmap_row))
     heatmap_min = np.min(arr)
     heatmap_max = np.max(arr)
-    fig, ax = plt.subplots(num_heatmaps, 1, figsize=(N_res_per_heatmap_row / len(aaList) * 4, num_heatmaps * 4))
+    fig, ax = plt.subplots(num_heatmaps, 1, figsize=(N_res_per_heatmap_row / len(aaList) * width_per_res, num_heatmaps * 4))
     for k in range(num_heatmaps):
         if num_heatmaps == 1:
             ax_k = ax

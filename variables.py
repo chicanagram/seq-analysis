@@ -116,6 +116,82 @@ amino_acid_groups = {
     "p+": ["K", "R"]   # Basic
 }
 
+aa_polarity_mapping = {
+    "A": "np",
+    "V": "np",
+    "I": "np",
+    "L": "np",
+    "M": "np",
+    "F": "np",
+    "W": "np",
+    "P": "np",
+    "G": "np",
+
+    "S": "p~",
+    "T": "p~",
+    "N": "p~",
+    "Q": "p~",
+    "Y": "p~",
+    "C": "p~",
+
+    "D": "p-",
+    "E": "p-",
+
+    "K": "p+",
+    "R": "p+",
+    "H": "p+",  # weak base, pKa ~6
+}
+
+# Kyte–Doolittle Hydropathy Index
+# (positive = more hydrophobic)
+kyte_doolittle_hydrophobicity_index = {
+    "A": 1.8,
+    "V": 4.2,
+    "I": 4.5,
+    "L": 3.8,
+    "M": 1.9,
+    "F": 2.8,
+    "W": -0.9,
+    "P": -1.6,
+    "G": -0.4,
+    "C": 2.5,
+    "S": -0.8,
+    "T": -0.7,
+    "Y": -1.3,
+    "N": -3.5,
+    "Q": -3.5,
+    "D": -3.5,
+    "E": -3.5,
+    "K": -3.9,
+    "R": -4.5,
+    "H": -3.2,
+}
+
+# Hopp–Woods Polarity Index
+# (positive = more polar / surface-exposed)
+hopp_woods_polarity_index = {
+    "R": 3.0,
+    "K": 3.0,
+    "D": 3.0,
+    "E": 3.0,
+    "Q": 0.2,
+    "N": 0.2,
+    "H": -0.5,
+    "S": 0.3,
+    "T": -0.4,
+    "Y": -2.3,
+    "C": -1.0,
+    "G": 0.0,
+    "P": 0.0,
+    "A": -0.5,
+    "V": -1.5,
+    "I": -1.8,
+    "L": -1.8,
+    "M": -1.3,
+    "F": -2.5,
+    "W": -3.4,
+}
+
 aa_to_cmap_color_mapping = {
     'Clustal': {
         '-': 0,  # Gaps
@@ -227,6 +303,29 @@ amino_acids_by_size = [
     'K',  # Lysine
     'R'   # Arginine
 ]
+
+aa_sidechain_volume = {
+    "G": 48.0,
+    "A": 67.0,
+    "S": 73.0,
+    "C": 86.0,
+    "D": 91.0,
+    "T": 93.0,
+    "N": 96.0,
+    "P": 90.0,
+    "V": 105.0,
+    "E": 109.0,
+    "Q": 114.0,
+    "H": 118.0,
+    "M": 124.0,
+    "I": 124.0,
+    "L": 124.0,
+    "K": 135.0,
+    "F": 135.0,
+    "Y": 141.0,
+    "R": 148.0,
+    "W": 163.0,
+}
 
 hetatm_non_metal_ion = ['HEM', 'NAG']
 hetatm_metal_ion = [' MG', '  K', ' NA', ' MN', ' CA']

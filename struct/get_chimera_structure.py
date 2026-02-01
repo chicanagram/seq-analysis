@@ -3,7 +3,7 @@ import pandas as pd
 import numpy as np
 pd.set_option('display.max_columns',None)
 from variables import address_dict, subfolders
-from utils import opsys, run_msa, fetch_sequences_from_fasta
+
 
 class ChimerizePDB:
     def __init__(
@@ -27,7 +27,7 @@ class ChimerizePDB:
         # run structural alignment and extract aligned residue positions as CSV
         else:
             print('Performing structural alignment of', *struct_names, '...')
-            from get_structure_alignment import AlignStruct
+            from align.run_structure_alignment import AlignStruct
             struct_fnames = [f+'.pdb' for f in struct_names]
             seq_align_fpath = f'{self.msa_dir}{self.data_fbase}/{struct_names[0]}_{struct_names[1]}_yasaraStructAli.fasta'
             # perform alignment and parsing of aligned PDB residue info

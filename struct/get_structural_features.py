@@ -172,7 +172,7 @@ if __name__ == '__main__':
     os.chdir('../')
     data_folder = address_dict['ECOHARVEST'] # address_dict['PIPS2'] #
     data_fbase = 'CARs' # 'lipases' # 'ET096' #  'CviUPO' #
-    pdb_fname = 'Boltz2_MpCAR-A_Oleoyl-AMP.pdb' # 'Docked_RMLmut_SucroseOleate_Chai.pdb' # 'Docked_ET096_ABTS.pdb' # 'MpCAR-A_Cinnamoyl-AMP.pdb' # 'Docked_CviUPO_S82.pdb'  # 'Docked_RML_OleicAcid_preOpt.pdb' # # 'ETS83096.pdb' #
+    pdb_fname = 'NiCAR-A/Boltz2_NiCAR-A_WT_Oleoyl-AMP.pdb' # 'Docked_RMLmut_SucroseOleate_Chai.pdb' # 'Docked_ET096_ABTS.pdb' # 'MpCAR-A_Cinnamoyl-AMP.pdb' # 'Docked_CviUPO_S82.pdb'  # 'Docked_RML_OleicAcid_preOpt.pdb' # # 'ETS83096.pdb' #
     ligand_resname_list =  ['LIG'] # ['HEM', 'UNK'] #  ['LIG'] # ['UNK'] #
     ligname = 'Oleoyl-AMP' # 'SucroseOleate' # 'ABTS'
     conservation_analysis_fname = None # 'ET096_UPO_aligned_clustalo_sift_selected.csv' # 'RML_blastp_nr_E1e-05_mafft_sift_selected.csv'

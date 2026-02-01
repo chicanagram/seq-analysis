@@ -1,14 +1,17 @@
 import os
 import pandas as pd
+import numpy as np
 import yasara
 from variables import address_dict, subfolders
-from utils import run_msa, fetch_sequences_from_fasta, get_mutations_on_sk_wrt_s0
+from utils import run_msa, fetch_sequences_from_fasta, get_mutations_on_sk_wrt_s0, run_tmalign
 
 class AlignStruct:
-    def __init__(self, data_folder, pdb_subfolder, data_fbase):
+    def __init__(self, data_folder, pdb_subfolder, data_fbase, delete_residue_str=None, superpose_method='resnum'):
         self.data_folder = data_folder
         self.pdb_subfolder = pdb_subfolder
         self.data_fbase = data_fbase
+        self.delete_residue_str = delete_residue_str
+        self.superpose_method = superpose_method
 
     def save_aligned_structures(self, struct_fpaths, output_sce_fpath=None, join_obj_in_pdb=False, save_indiv_aligned_structs=False):
         print('struct_fpaths:', len(struct_fpaths), struct_fpaths)
@@ -68,7 +71,14 @@ class AlignStruct:
 
         return num_iden, num_iden_hypho, num_sim, num_sim_hypho
 
-    def yasara_align_structures(self, struct_fpaths, seq_align_fpath, output_sce_fpath, join_obj_in_pdb=False, save_indiv_aligned_structs=False):
+    def yasara_align_structures(
+            self,
+            struct_fpaths,
+            seq_align_fpath,
+            output_sce_fpath,
+            join_obj_in_pdb=False,
+            save_indiv_aligned_structs=False
+    ):
 
         # Initialize YASARA
         yasara.info.mode = 'txt'
@@ -79,29 +89,104 @@ class AlignStruct:
         for i, struct_fpath in enumerate(struct_fpaths):
             yasara.LoadPDB(struct_fpath)
             yasara.ColorObj(i + 1, 'magenta')
-        # remove unnecessary components
-        yasara.DelWater()
+
+            # remove unnecessary components
+            yasara.DelWater()
+            yasara.DelRes('not Protein')
+
+            # delete selected residues and save temperory structures
+            if self.delete_residue_str is not None:
+                if isinstance(self.delete_residue_str,str):
+                    del_target = self.delete_residue_str
+                elif isinstance(self.delete_residue_str, list):
+                    del_target =self.delete_residue_str[i]
+                yasara.DelRes(f'Obj {i+1} and {del_target}')
+                print(f'Deleted selected residues for Obj {i+1}:', del_target)
+
+            # save PDB
+            yasara.SavePDB(f'Obj {i+1}', struct_fpath.replace('.pdb', '_TEMP.pdb'))
 
         # Align all other objects to object 1 using MUSTANGPP
-        obj_ref = yasara.NameObj(1)
+        obj_ref = os.path.basename(struct_fpaths[0])
+        num_res_ref = yasara.CountRes(f'Obj 1 and Protein')
+        resnum_list_ref = yasara.ListRes('Obj 1 and Protein', format='RESNUM')
+        coords_ref = np.reshape(np.array(yasara.PosRes('Obj 1 and Protein')), shape=(-1, 3))
+        seq_ref = yasara.SequenceRes('Obj 1 and Protein')[0]
+        print(f'Ref Object: {obj_ref} ({num_res_ref} residues)', '\n')
+
+        # iterate through objects 2 and up
         for obj_num in range(2, len(struct_fpaths) + 1):
+
+            # run TM-align (Zhang Yang group 2022 version)
+            tm_res = round(run_tmalign(struct_fpaths[0].replace('.pdb','_TEMP.pdb'), struct_fpaths[obj_num-1].replace('.pdb','_TEMP.pdb')),3)
+
+            # align structure to reference
             res = yasara.AlignObj(f'{obj_num} and Protein', '1 and Protein', method='MUSTANGPP', results=4)
-            rmsd, percent_identity, residues = res[0], res[1], res[2]
+            rmsd_ali_residues, percent_identity_ali_residues, num_ali_residues = res[0], res[1], res[2]
+            pairwise_ali_fpath = struct_fpaths[obj_num-1].replace('.pdb', '_ALI.fasta')
+            yasara.SaveAli(obj_num, 1, method='Structure', filename=pairwise_ali_fpath, format='FASTA')
+            ali_seqs, _, _ = fetch_sequences_from_fasta(pairwise_ali_fpath)
+            os.remove(pairwise_ali_fpath)
+
+            if obj_num==3:
+                ali_seqs_TEMPLATE = ali_seqs
+
+            # get superposed RMSD
+            if obj_num<3:
+                rmsd_sup = 0
+            else:
+                resnum_list = yasara.ListRes(f'Obj {obj_num} and Protein', format='RESNUM')
+                residx_ref = 0
+                residx = 0
+                pos_ref_ali = []
+                pos_target_ali = []
+                if self.superpose_method=='resnum':
+                    for resnum_ref, resnum in zip(resnum_list_ref, resnum_list):
+                        pos_ref = yasara.PosRes(f'Obj 1 and Protein and Res {resnum_ref}')
+                        pos_target = yasara.PosRes(f'Obj {obj_num} and Protein and Res {resnum}')
+                        pos_ref_ali.append(pos_ref)
+                        pos_target_ali.append(pos_target)
+                elif self.superpose_method=='struct':
+                    for res_ref, res_target in zip(ali_seqs_TEMPLATE[0], ali_seqs_TEMPLATE[1]):
+                        pos_ref, pos_target = [np.nan, np.nan, np.nan], [np.nan, np.nan, np.nan]
+                        # advance residue counters
+                        if res_ref !='-':
+                            residx_ref += 1
+                            if residx_ref - 1 < len(resnum_list_ref):
+                                resnum_ref = resnum_list_ref[residx_ref - 1]
+                                pos_ref = yasara.PosRes(f'Obj 1 and Protein and Res {resnum_ref}')
+                        if res_target !='-':
+                            residx += 1
+                            if residx-1<len(resnum_list):
+                                resnum = resnum_list[residx - 1]
+                                pos_target = yasara.PosRes(f'Obj {obj_num} and Protein and Res {resnum}')
+                                if len(pos_target) != 3: print(obj_num, resnum, pos_target, residx, resnum_list[residx - 1], resnum_list)
+                        pos_ref_ali.append(pos_ref)
+                        pos_target_ali.append(pos_target)
+                # get rmsd
+                pos_ref_ali = np.array(pos_ref_ali)
+                pos_target_ali = np.array(pos_target_ali)
+                rmsd_sup_byres = np.sqrt(np.sum((pos_ref_ali - pos_target_ali) ** 2, axis=1))
+                rmsd_sup = round(np.nanmean(rmsd_sup_byres), 2)
+
+            # parse alignment results
             calist = res[3:]
-            print('RMSD:', rmsd)
-            print('% identity:', percent_identity)
-            print('residues:', residues)
-            print('calist:', calist)
+            obj = os.path.basename(struct_fpaths[obj_num-1])
+            num_res = yasara.CountRes(f'Obj {obj_num} and Protein')
+            percent_ali_res = round(num_ali_residues/num_res*100,1)
+            print(f'{obj} ({num_res} residues)')
+            print('TM-align score:', tm_res)
+            print('RMSD (superposed residues):', rmsd_sup)
+            print('RMSD (aligned residues):', round(rmsd_ali_residues,2))
+            print(f'# of aligned residues: {num_ali_residues}/{num_res} ({percent_ali_res}%)')
 
             # Process aligned residues
-            num_iden, num_iden_hypho, num_sim, num_sim_hypho = self.check_and_color(residues, calist)
+            num_iden, num_iden_hypho, num_sim, num_sim_hypho = self.check_and_color(num_ali_residues, calist)
 
             # print stats
-            obj = yasara.NameObj(obj_num)
-            print(obj_ref, obj, '# of aligned residues:', residues, 'RMSD:', f'{rmsd:.2f}', '% identity:', round(percent_identity, 3))
-            print(f'[IDENTICAL] all: {num_iden} ({100 * num_iden / residues:.2f}%); hydrophobic: {num_iden_hypho} ({100 * num_iden_hypho / residues:.2f}%); non-hydrophobic: {num_iden - num_iden_hypho} ({100 * (num_iden - num_iden_hypho) / residues:.2f}%)')
-            print(f'[SIMILAR] all: {num_sim} ({100 * num_sim / residues:.2f}%); hydrophobic: {num_sim_hypho} ({100 * num_sim_hypho / residues:.2f}%); non-hydrophobic: {num_sim - num_sim_hypho} ({100 * (num_sim - num_sim_hypho) / residues:.2f}%)')
-
+            print(f'[IDENTICAL] all: {num_iden} ({100 * num_iden / num_ali_residues:.1f}%); hydrophobic: {num_iden_hypho} ({100 * num_iden_hypho / num_ali_residues:.1f}%); non-hydrophobic: {num_iden - num_iden_hypho} ({100 * (num_iden - num_iden_hypho) / num_ali_residues:.1f}%)')
+            print(f'[SIMILAR] all: {num_sim} ({100 * num_sim / num_ali_residues:.1f}%); hydrophobic: {num_sim_hypho} ({100 * num_sim_hypho / num_ali_residues:.1f}%); non-hydrophobic: {num_sim - num_sim_hypho} ({100 * (num_sim - num_sim_hypho) / num_ali_residues:.1f}%)')
+            print()
         # Save the alignment as FASTA
         yasara.SaveAli('!1', '1', filename=seq_align_fpath, format='FASTA')
 
@@ -179,10 +264,10 @@ class AlignStruct:
             struct_names,
             seq_align_fpath,
             run_structure_alignment=True,
-            parse_seq_struct_alignments=True,
+            parse_seq_struct_alignments=False,
             save_sce=False
     ):
-        struct_fpaths = [self.data_folder + self.pdb_subfolder + self.data_fbase + '/' + f for f in struct_names + '.pdb']
+        struct_fpaths = [f'{self.data_folder}{self.pdb_subfolder}{self.data_fbase}/{f}.pdb' for f in struct_names]
         csv_fpath = seq_align_fpath.replace('msa/', 'pdb/').replace('.fasta', '.csv')
         output_sce_fpath = None
         if save_sce:
@@ -197,51 +282,80 @@ class AlignStruct:
             df = self.parse_aligned_struct_info(seq_align_fpath, struct_fpaths, csv_fpath)
             return df
 
+    def use_seed_alignment_to_get_msa(self, seq_fname, output_msa_fpath, seq_align_fpath, seq_dir, msa_dir):
+        run_msa(seq_fname, output_msa_fpath, 'mafft', seq_dir, msa_dir, fmt='fasta', seed_ali=seq_align_fpath)
+
+
 if __name__ == '__main__':
-    print(os.getcwd())
-    data_folder = address_dict['PIPS2']
-    data_fbase = ''
+    os.chdir('../')
+    print('CWD:', os.getcwd())
+    data_folder = address_dict['PIPS2'] # address_dict['ECOHARVEST']
+    data_fbase = 'UPOs_peroxygenation_analysis/enzyme_only_with_heme_cpdI/' # 'CARs/PoET2_NiCAR-MpCAR_Hybrids'
     seq_dir = data_folder + subfolders['sequences'] + data_fbase + '/'
     msa_dir = data_folder + subfolders['msa'] + data_fbase + '/'
-    run_structure_alignment = False
+    run_structure_alignment = True
+    save_sce = True
     join_obj_in_pdb = False
     save_indiv_aligned_structs = False
-    parse_seq_struct_alignments = True
+    parse_seq_struct_alignments = False
     struct_names = [
-        'MpCAR-A',
-        'NiCAR-A',
-        'MmCAR-A',
-        # 'CviUPO',
-        # 'ET096',
-        # 'CmaUPO',
+        'ET096',
+        'CviUPO',
+        'CviUPO-F88L+T158A',
+        'DcaUPO',
+        'TE314',
+        'OA167'
+
+        # # 'Boltz2_NiCAR-A_WT_Oleoyl-AMP',
+        # 'Boltz2_MpCAR-A_WT_Oleoyl-AMP',
+        # 'Boltz2_MpCAR-A_WT_Oleoyl-AMP',
+        # 'Boltz2_NiCAR-A_WT_Oleoyl-AMP',
+        #
+        # 'PoET2_NiCAR-MpCAR_Hybrid01',
+        # 'PoET2_NiCAR-MpCAR_Hybrid02',
+        # 'PoET2_NiCAR-MpCAR_Hybrid03',
+        # 'PoET2_NiCAR-MpCAR_Hybrid04',
+        # 'PoET2_NiCAR-MpCAR_Hybrid05',
+
+        # 'PoET2_NiCAR-MpCAR_Hybrid06',
+        # 'PoET2_NiCAR-MpCAR_Hybrid07',
+        # 'PoET2_NiCAR-MpCAR_Hybrid08',
+        # 'PoET2_NiCAR-MpCAR_Hybrid09',
+        # 'PoET2_NiCAR-MpCAR_Hybrid10',
     ]
-    seq_align_fpath = f'{msa_dir}{"_".join(struct_names)}_StructAli.fasta'
-    struct_fpaths = [f'{data_folder}{subfolders["pdb"]}{data_fbase}/{f}.pdb' for f in struct_names]
-    print(seq_align_fpath)
-    print(struct_fpaths)
+    delete_residue_str = None
+    # delete_residue_str = ['Protein and 1-369']*2 + ['Protein and 1-383']*6 # vs MpCAR ref, hybrids #1-5
+    # delete_residue_str = ['Protein and 1-383']*2 + ['Protein and 1-369']*1 + ['Protein and 1-383']*5  # vs NiCAR ref, hybrids #1-5
+    # delete_residue_str = ['Protein and not 1-369']*2 + ['Protein and not 1-383']*6 # vs MpCAR ref, hybrids #6-10
+    # delete_residue_str = ['Protein and not 1-383']*2 + ['Protein and not 1-369']*1 + ['Protein and not 1-383']*5  # vs NiCAR ref, hybrids #6-10
+    # delete_residue_str = ['Protein and 1-383']*2 + ['Protein and 1-369']*1 + ['Protein and 1-383']*5
+    superpose_method = 'struct' # 'resnum' #
+
+    # join all names
+    # seq_align_fpath = f'{msa_dir}{"_".join(struct_names)}_StructAli.fasta'
+    # seq_align_fpath = f'{msa_dir}PoET2_NiCARseq_MpCARstruct_Res383hybrid_06-10_StructAli.fasta'
+    seq_align_fpath = f'{data_folder + subfolders["msa"]}UPOs_peroxygenation.fasta'
 
     # perform alignment and parsing of aligned PDB residue info
-    align_struct = AlignStruct(data_folder, subfolders['pdb'], data_fbase)
-    align_struct.yasara_align_structures(
-        struct_fpaths,
-        seq_align_fpath,
-        seq_align_fpath.replace('/msa/','/sce/').replace('.fasta','.sce'),
-        join_obj_in_pdb,
-        save_indiv_aligned_structs,
+    align_struct = AlignStruct(
+        data_folder,
+        subfolders['pdb'],
+        data_fbase,
+        delete_residue_str,
+        superpose_method
     )
-    # df = align_struct.run_pipeline(struct_fnames, seq_align_fpath)
+
+    # run alignment pipeline
+    df = align_struct.run_pipeline(
+        struct_names,
+        seq_align_fpath,
+        run_structure_alignment,
+        parse_seq_struct_alignments,
+        save_sce
+    )
 
     # convert mutations from one basis (indexed wrt a 1st sequence) to other bases
     mutations_ref_s0 = None # ['F88A', 'T157A'] # ['T125A', 'A129G', 'A247H', 'T244A', 'F243G']
     reorder_seqs = None # [2,0,1] #
     if mutations_ref_s0 is not None:
         mutations_conversion = get_mutations_on_sk_wrt_s0(seq_align_fpath, mutations_ref_s0, reorder_seqs)
-
-    ##############################################
-    # use alignment as seed align more sequences #
-    ##############################################
-    seq_fname = None
-    output_msa_fpath = None
-    if seq_fname is not None and output_msa_fpath is not None:
-        seq_fname = 'MpCAR-A.fasta'  # None
-        run_msa(seq_fname, output_msa_fpath, 'mafft', seq_dir, msa_dir, fmt='fasta', seed_ali=seq_align_fpath)

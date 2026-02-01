@@ -41,8 +41,8 @@ def one_hot_encode_sequences(sequences, max_length=None):
 
 def main():
     data_folder = address_dict['PIPS2'] # address_dict['PIPS'] # address_dict['PON-Sol2']
-    data_subfolder = 'ET096_mutagenesis_Lib2&3&NNK' # 'GOh1052_mutagenesis' # '''ET096_mutagenesis_Round3-batch1' # 'ET096_mutagenesis_purified_activity' #
-    input_fname = 'ET096_mutagenesis_Lib2&3&NNK.csv' # 'GOh1052_mutagenesis.csv' # 'ET096_mutagenesis_Round3-batch1.csv' # 'ET096_mutagenesis_purified_activity.csv'
+    data_subfolder = 'ET096_mutagenesis_Lib3' # 'ET096_mutagenesis_Purified_2025-12-05' # 'GOh1052_mutagenesis' # '''ET096_mutagenesis_Round3-batch1' # 'ET096_mutagenesis_purified_activity' #
+    input_fname = 'ET096_mutagenesis_Lib3.csv' # 'ET096_mutagenesis_Purified_2025-12-05.csv' # 'GOh1052_mutagenesis.csv' # 'ET096_mutagenesis_Round3-batch1.csv' # 'ET096_mutagenesis_purified_activity.csv'
     output_fname = 'ohe.npz' # 'ohe_rev.npz'
     ohe_dir = data_folder + subfolders['ohe'] + data_subfolder + '/'
     df = pd.read_csv(data_folder + subfolders['expdata'] + data_subfolder + '/' + input_fname)
