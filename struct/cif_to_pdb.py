@@ -1,13 +1,16 @@
 import subprocess
 import os
+import yasara
 from variables import address_dict, subfolders
 chimerax_dir = "/Applications/ChimeraX-1.10.1.app/Contents/MacOS/"
 def main():
     # --- Configuration ---
     os.chdir('../')
-    data_folder = address_dict['PON-Sol2']
-    data_subfolder = ''
-    cif_dir = data_folder + 'cif/' + data_subfolder + '/'
+    data_folder = address_dict['PIPS2'] # address_dict['PON-Sol2']
+    struct_name = 'TE314'
+    data_subfolder = f'UPOs_peroxygenation_analysis/docked/chai1/{struct_name}_S82_chai1'
+    # data_subfolder = f'UPOs_peroxygenation_analysis/docked/chai1_heme(notCpdI)/{struct_name}_Heme_Mg_S82'
+    cif_dir = data_folder + 'pdb/' + data_subfolder + '/'
     pdb_dir = cif_dir.replace('cif/', 'pdb/')
     cif_fname_list = [f for f in os.listdir(cif_dir) if f.find('.cif')>-1]
     print(cif_fname_list)
@@ -18,6 +21,8 @@ def main():
     for cif_fname in cif_fname_list:
         cif_fpath = cif_dir + cif_fname
         pdb_fpath = pdb_dir + cif_fname.replace('.cif', '.pdb').replace('_model_0','')
+        pdb_fpath = pdb_fpath.replace('pred.rank', f'{struct_name}_S82_chai1')
+
         cmd = [
             os.path.join(chimerax_dir, "ChimeraX"),
             "--nogui",

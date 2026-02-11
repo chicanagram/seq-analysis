@@ -66,8 +66,9 @@ def pdb_to_dataframe(pdb_path: Path) -> pd.DataFrame:
             rec = line[0:6].strip()
             if rec in {"ATOM", "HETATM"}:
                 rows.append(parse_pdb_atom_line(line))
-
-    return pd.DataFrame(rows)
+    df = pd.DataFrame(rows)
+    df = df[df['element']!='H']
+    return df
 
 
 if __name__ == "__main__":
@@ -75,9 +76,10 @@ if __name__ == "__main__":
 
     # ---- user input ----
     data_folder = address_dict['PIPS2']
-    data_subfolder = 'UPOs_peroxygenation_analysis/structure_csv/' # 'CARs' # 'sidestream_cocktail' #
+    data_subfolder = 'UPOs_peroxygenation_analysis/docked/structure_csv/' # 'CARs' # 'sidestream_cocktail' #
     pdb_dir = data_folder + subfolders['pdb'] + data_subfolder
     pdb_fname_list = [f for f in os.listdir(pdb_dir) if f.find('.pdb')>-1]
+    extract_ligand_data_molname = ['D'] # None
 
     # process files
     for pdb_fname in pdb_fname_list:
@@ -94,6 +96,12 @@ if __name__ == "__main__":
         # get backbone of protein only
         df_backbone = df[df['atom_name']=='CA']
         df_backbone.to_csv(out_csv.replace('.csv','_backbone.csv'), index=False)
-
         print(f"Parsed {len(df)} atoms")
         print(f"Saved CSV to: {out_csv}")
+
+        # extract ligand data
+        if extract_ligand_data_molname is not None:
+            # extract ligand CSV
+            for ligand_molname in extract_ligand_data_molname:
+                df_ligand = df[df['chain_id']==ligand_molname].reset_index(drop=True)
+                df_ligand.to_csv(out_csv.replace('.csv', f'_Lig{ligand_molname}.csv'))

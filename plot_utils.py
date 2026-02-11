@@ -122,7 +122,6 @@ def plot_msa_seaborn(msa_fpath, color_scheme='Taylor', plot_msa_pos_range=None,
             else:
                 resnum_list.append(None)
         msa_df[f'{seq}_resnum'] = resnum_list
-    print(msa_df)
 
     # filter MSA positions by reference sequence
     if filter_by_refseq_or_idx is not None:

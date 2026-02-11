@@ -6,10 +6,10 @@ from variables import address_dict, subfolders
 from utils import run_msa, fetch_sequences_from_fasta, get_mutations_on_sk_wrt_s0, run_tmalign
 
 class AlignStruct:
-    def __init__(self, data_folder, pdb_subfolder, data_fbase, delete_residue_str=None, superpose_method='resnum'):
-        self.data_folder = data_folder
-        self.pdb_subfolder = pdb_subfolder
-        self.data_fbase = data_fbase
+    def __init__(self, pdb_dir, sce_dir, msa_dir, delete_residue_str=None, superpose_method='resnum'):
+        self.pdb_dir = pdb_dir
+        self.sce_dir = sce_dir
+        self.msa_dir = msa_dir
         self.delete_residue_str = delete_residue_str
         self.superpose_method = superpose_method
 
@@ -29,9 +29,10 @@ class AlignStruct:
             for i in range(num_obj):
                 obj_num = i + 1
                 struct_fpath_unaligned = struct_fpaths[i]
-                other_struct_fpaths = [struct_fpaths[k] for k in range(len(struct_fpaths)) if i != k]
-                other_structs_str = '-'.join([os.path.basename(f).replace('.pdb', '') for f in other_struct_fpaths])
-                output_pdb_fpath = struct_fpath_unaligned.replace('.pdb', f'_aligned_{other_structs_str}.pdb')
+                # other_struct_fpaths = [struct_fpaths[k] for k in range(len(struct_fpaths)) if i != k]
+                # other_structs_str = '-'.join([os.path.basename(f).replace('.pdb', '') for f in other_struct_fpaths])
+                # output_pdb_fpath = struct_fpath_unaligned.replace('.pdb', f'_aligned_{other_structs_str}.pdb')
+                output_pdb_fpath = struct_fpath_unaligned
                 yasara.SavePDB(obj_num, output_pdb_fpath)
                 print('Saved PDB output:', output_pdb_fpath)
 
@@ -77,7 +78,8 @@ class AlignStruct:
             seq_align_fpath,
             output_sce_fpath,
             join_obj_in_pdb=False,
-            save_indiv_aligned_structs=False
+            save_indiv_aligned_structs=False,
+            delete_not_protein=False
     ):
 
         # Initialize YASARA
@@ -91,10 +93,11 @@ class AlignStruct:
             yasara.ColorObj(i + 1, 'magenta')
 
             # remove unnecessary components
-            yasara.DelWater()
-            yasara.DelRes('not Protein')
+            if delete_not_protein:
+                yasara.DelWater()
+                yasara.DelRes('not Protein')
 
-            # delete selected residues and save temperory structures
+            # delete selected residues and save temporary structures
             if self.delete_residue_str is not None:
                 if isinstance(self.delete_residue_str,str):
                     del_target = self.delete_residue_str
@@ -116,9 +119,14 @@ class AlignStruct:
 
         # iterate through objects 2 and up
         for obj_num in range(2, len(struct_fpaths) + 1):
+            # get struct_fpath
+            struct_fpath = struct_fpaths[obj_num-1]
 
-            # run TM-align (Zhang Yang group 2022 version)
-            tm_res = round(run_tmalign(struct_fpaths[0].replace('.pdb','_TEMP.pdb'), struct_fpaths[obj_num-1].replace('.pdb','_TEMP.pdb')),3)
+            # # run TM-align (Zhang Yang group 2022 version)
+            if delete_not_protein:
+                tm_res = round(run_tmalign(struct_fpaths[0].replace('.pdb','_TEMP.pdb'), struct_fpaths[obj_num-1].replace('.pdb','_TEMP.pdb')),3)
+            else:
+                tm_res = None
 
             # align structure to reference
             res = yasara.AlignObj(f'{obj_num} and Protein', '1 and Protein', method='MUSTANGPP', results=4)
@@ -166,8 +174,11 @@ class AlignStruct:
                 # get rmsd
                 pos_ref_ali = np.array(pos_ref_ali)
                 pos_target_ali = np.array(pos_target_ali)
-                rmsd_sup_byres = np.sqrt(np.sum((pos_ref_ali - pos_target_ali) ** 2, axis=1))
-                rmsd_sup = round(np.nanmean(rmsd_sup_byres), 2)
+                try:
+                    rmsd_sup_byres = np.sqrt(np.sum((pos_ref_ali - pos_target_ali) ** 2, axis=1))
+                    rmsd_sup = round(np.nanmean(rmsd_sup_byres), 2)
+                except:
+                    rmsd_sup = None
 
             # parse alignment results
             calist = res[3:]
@@ -187,8 +198,13 @@ class AlignStruct:
             print(f'[IDENTICAL] all: {num_iden} ({100 * num_iden / num_ali_residues:.1f}%); hydrophobic: {num_iden_hypho} ({100 * num_iden_hypho / num_ali_residues:.1f}%); non-hydrophobic: {num_iden - num_iden_hypho} ({100 * (num_iden - num_iden_hypho) / num_ali_residues:.1f}%)')
             print(f'[SIMILAR] all: {num_sim} ({100 * num_sim / num_ali_residues:.1f}%); hydrophobic: {num_sim_hypho} ({100 * num_sim_hypho / num_ali_residues:.1f}%); non-hydrophobic: {num_sim - num_sim_hypho} ({100 * (num_sim - num_sim_hypho) / num_ali_residues:.1f}%)')
             print()
+
+            # delete TEMP file
+            os.remove(struct_fpath.replace('.pdb', '_TEMP.pdb'))
+
         # Save the alignment as FASTA
-        yasara.SaveAli('!1', '1', filename=seq_align_fpath, format='FASTA')
+        if seq_align_fpath is not None:
+            yasara.SaveAli('!1', '1', filename=seq_align_fpath, format='FASTA')
 
         # save aligned structures
         self.save_aligned_structures(struct_fpaths, output_sce_fpath, join_obj_in_pdb, save_indiv_aligned_structs)
@@ -262,23 +278,28 @@ class AlignStruct:
     def run_pipeline(
             self,
             struct_names,
-            seq_align_fpath,
+            seq_align_fname,
             run_structure_alignment=True,
             parse_seq_struct_alignments=False,
-            save_sce=False
+            save_sce=False,
+            join_obj_in_pdb=False,
+            save_indiv_aligned_structs=False,
+            delete_not_protein=False
     ):
-        struct_fpaths = [f'{self.data_folder}{self.pdb_subfolder}{self.data_fbase}/{f}.pdb' for f in struct_names]
-        csv_fpath = seq_align_fpath.replace('msa/', 'pdb/').replace('.fasta', '.csv')
+        # get inputs
+        struct_fpaths = [f'{self.pdb_dir}{f}.pdb' for f in struct_names]
+        seq_align_fpath = self.msa_dir + seq_align_fname if seq_align_fname is not None else None
         output_sce_fpath = None
         if save_sce:
-            output_sce_fpath = seq_align_fpath.replace('msa/', 'sce/').replace('.fasta', '.sce')
+            output_sce_fpath = self.sce_dir + seq_align_fname.replace('.fasta', '.sce')
 
         # align structures
         if run_structure_alignment:
-            self.yasara_align_structures(struct_fpaths, seq_align_fpath, output_sce_fpath)
+            self.yasara_align_structures(struct_fpaths, seq_align_fpath, output_sce_fpath, join_obj_in_pdb, save_indiv_aligned_structs, delete_not_protein)
 
         # parse aligned struct info
         if parse_seq_struct_alignments:
+            csv_fpath = seq_align_fpath.replace('msa/', 'pdb/').replace('.fasta', '.csv')
             df = self.parse_aligned_struct_info(seq_align_fpath, struct_fpaths, csv_fpath)
             return df
 
@@ -289,23 +310,30 @@ class AlignStruct:
 if __name__ == '__main__':
     os.chdir('../')
     print('CWD:', os.getcwd())
+    # directories
     data_folder = address_dict['PIPS2'] # address_dict['ECOHARVEST']
-    data_fbase = 'UPOs_peroxygenation_analysis/enzyme_only_with_heme_cpdI/' # 'CARs/PoET2_NiCAR-MpCAR_Hybrids'
+    data_fbase = 'UPOs_peroxygenation_analysis/docked/ALL_aligned' # 'CARs/PoET2_NiCAR-MpCAR_Hybrids'
+    pdb_dir = data_folder + subfolders['pdb'] + data_fbase + '/'
+    sce_dir = pdb_dir.replace('pdb','sce')
     seq_dir = data_folder + subfolders['sequences'] + data_fbase + '/'
-    msa_dir = data_folder + subfolders['msa'] + data_fbase + '/'
-    run_structure_alignment = True
-    save_sce = True
-    join_obj_in_pdb = False
-    save_indiv_aligned_structs = False
-    parse_seq_struct_alignments = False
-    struct_names = [
-        'ET096',
-        'CviUPO',
-        'CviUPO-F88L+T158A',
-        'DcaUPO',
-        'TE314',
-        'OA167'
+    msa_dir = None # data_folder + subfolders['msa'] + data_fbase + '/'
+    # seq_align_fname = None
+    # seq_align_fname = f'{"_".join(struct_names)}_StructAli.fasta'
+    # seq_align_fname = f'PoET2_NiCARseq_MpCARstruct_Res383hybrid_06-10_StructAli.fasta'
+    seq_align_fname = 'UPOs_peroxygenation.fasta'
 
+    # parameters
+    run_structure_alignment = True
+    save_sce = False
+    join_obj_in_pdb = False
+    save_indiv_aligned_structs = True
+    parse_seq_struct_alignments = False
+    delete_not_protein = False
+    struct_base = 'OA167'
+    struct_name_ref = f'{struct_base}_S82_swissdock_0'
+    struct_names = [struct_name_ref] + \
+                   [f.replace('.pdb','') for f in os.listdir(pdb_dir) if (f.find('.pdb')>-1 and f.replace('.pdb','')!=struct_name_ref and f.find(struct_base)>-1)]
+    # struct_names = [
         # # 'Boltz2_NiCAR-A_WT_Oleoyl-AMP',
         # 'Boltz2_MpCAR-A_WT_Oleoyl-AMP',
         # 'Boltz2_MpCAR-A_WT_Oleoyl-AMP',
@@ -322,7 +350,8 @@ if __name__ == '__main__':
         # 'PoET2_NiCAR-MpCAR_Hybrid08',
         # 'PoET2_NiCAR-MpCAR_Hybrid09',
         # 'PoET2_NiCAR-MpCAR_Hybrid10',
-    ]
+    # ]
+    print(struct_names)
     delete_residue_str = None
     # delete_residue_str = ['Protein and 1-369']*2 + ['Protein and 1-383']*6 # vs MpCAR ref, hybrids #1-5
     # delete_residue_str = ['Protein and 1-383']*2 + ['Protein and 1-369']*1 + ['Protein and 1-383']*5  # vs NiCAR ref, hybrids #1-5
@@ -331,16 +360,11 @@ if __name__ == '__main__':
     # delete_residue_str = ['Protein and 1-383']*2 + ['Protein and 1-369']*1 + ['Protein and 1-383']*5
     superpose_method = 'struct' # 'resnum' #
 
-    # join all names
-    # seq_align_fpath = f'{msa_dir}{"_".join(struct_names)}_StructAli.fasta'
-    # seq_align_fpath = f'{msa_dir}PoET2_NiCARseq_MpCARstruct_Res383hybrid_06-10_StructAli.fasta'
-    seq_align_fpath = f'{data_folder + subfolders["msa"]}UPOs_peroxygenation.fasta'
-
     # perform alignment and parsing of aligned PDB residue info
     align_struct = AlignStruct(
-        data_folder,
-        subfolders['pdb'],
-        data_fbase,
+        pdb_dir,
+        sce_dir,
+        msa_dir,
         delete_residue_str,
         superpose_method
     )
@@ -348,14 +372,18 @@ if __name__ == '__main__':
     # run alignment pipeline
     df = align_struct.run_pipeline(
         struct_names,
-        seq_align_fpath,
+        seq_align_fname,
         run_structure_alignment,
         parse_seq_struct_alignments,
-        save_sce
+        save_sce,
+        join_obj_in_pdb,
+        save_indiv_aligned_structs,
+        delete_not_protein
     )
 
     # convert mutations from one basis (indexed wrt a 1st sequence) to other bases
     mutations_ref_s0 = None # ['F88A', 'T157A'] # ['T125A', 'A129G', 'A247H', 'T244A', 'F243G']
     reorder_seqs = None # [2,0,1] #
     if mutations_ref_s0 is not None:
+        seq_align_fpath = msa_dir + seq_align_fname
         mutations_conversion = get_mutations_on_sk_wrt_s0(seq_align_fpath, mutations_ref_s0, reorder_seqs)
